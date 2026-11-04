@@ -13,12 +13,10 @@ substring without word segmentation.
 ## Usage
 
 ```bash
-git clone https://github.com/sters/cc-session-archive
-cd cc-session-archive
-bin/cc-session-archive.ts sync        # import new lines (incremental)
-bin/cc-session-archive.ts search 注文履歴 OrderItems --since 2026-10-01
-bin/cc-session-archive.ts sessions --project my-app
-bin/cc-session-archive.ts show <session-id>
+bunx github:sters/cc-session-archive sync        # import new lines (incremental)
+bunx github:sters/cc-session-archive search 注文履歴 OrderItems --since 2026-10-01
+bunx github:sters/cc-session-archive sessions --project my-app
+bunx github:sters/cc-session-archive show <session-id>
 ```
 
 `search` returns messages containing every term, newest first. Terms of one or two characters still match, but are
@@ -50,7 +48,7 @@ Run `sync` when a session ends, from `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "bun /path/to/cc-session-archive/bin/cc-session-archive.ts sync >/dev/null 2>&1"
+            "command": "bunx github:sters/cc-session-archive sync >/dev/null 2>&1"
           }
         ]
       }
@@ -65,7 +63,7 @@ but only sessions synced before their transcript was deleted. Raise `cleanupPeri
 ## Letting Claude use it
 
 This repository is a Claude Code plugin marketplace. Installing the plugin gives Claude the `session-archive` skill,
-which runs the CLI bundled in the plugin:
+which runs the CLI through `bunx`:
 
 ```text
 /plugin marketplace add sters/cc-session-archive

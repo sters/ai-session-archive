@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Full-text search over Claude Code session transcripts. `sync` reads `~/.claude/projects/**/*.jsonl` (never writes to
 them) into a SQLite FTS5 index; `search`, `sessions` and `show` query it. The repository is also a Claude Code plugin
-marketplace whose `session-archive` skill runs the bundled CLI.
+marketplace whose `session-archive` skill runs the CLI through `bunx github:sters/cc-session-archive`.
 
 ## Commands
 

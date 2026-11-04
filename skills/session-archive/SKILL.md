@@ -5,8 +5,8 @@ description: Search past Claude Code sessions — what the user asked, what was 
 
 # session-archive
 
-Past sessions are indexed in a local SQLite database by `cc-session-archive`, which ships in
-this plugin. Run it as `bun <this skill's base directory>/../../bin/cc-session-archive.ts <command>`.
+Past sessions are indexed in a local SQLite database by `cc-session-archive`. Run it as
+`bunx github:sters/cc-session-archive <command>`.
 
 1. Run `sync` first, so the current and recently ended sessions are included. It reads only
    what was appended since the last run, so it is cheap.
