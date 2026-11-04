@@ -1,0 +1,13 @@
+{
+  "name": "cc-session-archive",
+  "owner": {
+    "name": "sters"
+  },
+  "plugins": [
+    {
+      "name": "cc-session-archive",
+      "source": "./",
+      "description": "Search past Claude Code sessions through a local full-text index"
+    }
+  ]
+}

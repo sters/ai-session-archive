@@ -1,0 +1,5 @@
+[fmt]
+printWidth = 120
+
+[lint]
+typeAware = true

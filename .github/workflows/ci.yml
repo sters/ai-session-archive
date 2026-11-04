@@ -1,0 +1,36 @@
+name: CI
+on:
+  # push:
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .tool-versions
+      - run: bun install --frozen-lockfile
+      - run: bun check
+      - run: bun test
+
+  # bun lint and bun fmt ship in canary builds only.
+  lint:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+      - run: bun install --frozen-lockfile
+      - run: bun lint
+      - run: bun fmt --check

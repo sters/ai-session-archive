@@ -1,0 +1,8 @@
+{
+  "name": "cc-session-archive",
+  "version": "0.1.0",
+  "description": "Search past Claude Code sessions through a local full-text index",
+  "author": {
+    "name": "sters"
+  }
+}
