@@ -3,8 +3,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { openDb } from "../src/db";
-import { getSession, listSessions, search, snippet } from "../src/query";
+import { getSession, listSessions, local, search, snippet } from "../src/query";
 import { sync } from "../src/sync";
+import { serve } from "../src/web/server";
 
 const USAGE = `Usage: cc-session-archive <command> [options]
 
@@ -13,11 +14,13 @@ Commands:
   search <term...>         Messages containing every term, newest first
   sessions                 Main sessions, newest first
   show <session-id>        Every message of a session, with its subagents listed
+  web                      Serve search and session pages on http://localhost:<port>
 
 Options:
   --project <text>         Only sessions whose cwd contains <text>
   --since <YYYY-MM-DD>     Only messages (search) or sessions (sessions) at or after this local date
   --limit <n>              Maximum rows (default: search 30, sessions 50)
+  --port <n>               Port for web (default: 7357)
 
 Environment:
   CC_SESSION_ARCHIVE_DB    Database path (default: ~/.local/share/cc-session-archive/archive.sqlite)
@@ -29,6 +32,7 @@ const { values, positionals } = parseArgs({
     project: { type: "string" },
     since: { type: "string" },
     limit: { type: "string" },
+    port: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -49,13 +53,6 @@ const filter = (defaultLimit: number) => ({
   since,
   limit: values.limit ? Number(values.limit) : defaultLimit,
 });
-
-function local(ts: string | null): string {
-  if (!ts) return "????-??-?? ??:??";
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 
 switch (command) {
   case "sync": {
@@ -98,6 +95,11 @@ switch (command) {
       }
       for (const a of subagents) console.log(`subagent ${a.id} (${a.agent_type}): ${a.description ?? ""}`);
     }
+    break;
+  }
+  case "web": {
+    const server = serve(db, Number(values.port ?? 7357));
+    console.log(`listening on ${server.url}`);
     break;
   }
   default:

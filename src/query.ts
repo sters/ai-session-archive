@@ -48,6 +48,13 @@ export function snippet(text: string, terms: string[]): string {
   return (from > 0 ? "…" : "") + text.slice(from, to).replace(/\s+/g, " ") + (to < text.length ? "…" : "");
 }
 
+export function local(ts: string | null): string {
+  if (!ts) return "????-??-?? ??:??";
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export type SessionRow = {
   id: string;
   parent_id: string | null;
@@ -63,7 +70,11 @@ export type SessionRow = {
 
 const SESSION_COLUMNS = "id, parent_id, file_path, cwd, git_branch, title, agent_type, description, first_ts, last_ts";
 
-export function listSessions(db: Database, f: Filter): SessionRow[] {
+export type ListedSession = SessionRow & { structured: number };
+
+// `structured` is 1 when the session's last message is a StructuredOutput tool call, i.e. it ended by returning
+// schema-shaped output.
+export function listSessions(db: Database, f: Filter): ListedSession[] {
   const where = ["parent_id IS NULL"];
   const params: (string | number)[] = [];
   if (f.project) {
@@ -76,8 +87,11 @@ export function listSessions(db: Database, f: Filter): SessionRow[] {
   }
   params.push(f.limit);
   return db
-    .query<SessionRow, (string | number)[]>(
-      `SELECT ${SESSION_COLUMNS} FROM sessions WHERE ${where.join(" AND ")} ORDER BY first_ts DESC LIMIT ?`,
+    .query<ListedSession, (string | number)[]>(
+      `SELECT ${SESSION_COLUMNS},
+         (SELECT tool FROM messages WHERE session = sessions.rowid ORDER BY id DESC LIMIT 1) IS 'StructuredOutput'
+           AS structured
+       FROM sessions WHERE ${where.join(" AND ")} ORDER BY first_ts DESC LIMIT ?`,
     )
     .all(...params);
 }

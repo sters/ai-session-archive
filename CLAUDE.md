@@ -30,6 +30,9 @@ bin/cc-session-archive.ts --help
   triggers, so Japanese matches by substring.
 - `src/query.ts` — search with `LIKE` on the FTS table (served by the trigram index for terms of three or more
   characters), session listing, and session detail.
+- `src/web/` — `web` command. `server.ts` serves JSON from `query.ts` and `index.html` as a Bun HTML import, which
+  bundles `app.tsx` at runtime. `app.tsx` builds DOM nodes with its own `h()` through the `@jsx` pragma, so there is
+  no React or other client dependency.
 - `skills/session-archive/SKILL.md` and `.claude-plugin/` — the plugin. tagpr bumps the version in both
   `package.json` and `.claude-plugin/plugin.json`.
 

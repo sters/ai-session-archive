@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cc-session-archive</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font: 14px/1.5 system-ui, sans-serif;
+      }
+      body {
+        max-width: 72rem;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      input[name="q"] {
+        flex: 1 1 20rem;
+      }
+      input,
+      button {
+        font: inherit;
+        padding: 0.3rem 0.5rem;
+      }
+      .meta {
+        color: GrayText;
+        font-size: 12px;
+      }
+      .row {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0.25rem 0 0;
+        font-size: 13px;
+      }
+      .msg {
+        margin: 1rem 0;
+      }
+      .user {
+        border-left: 3px solid #4a8;
+        padding-left: 0.5rem;
+      }
+      .tool pre {
+        color: GrayText;
+      }
+      details.msg {
+        margin: 0.25rem 0;
+      }
+      summary {
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .toggle {
+        display: block;
+        margin-top: 1rem;
+        position: sticky;
+        top: 0;
+        padding: 0.25rem 0;
+        background: Canvas;
+      }
+      .badge {
+        font-size: 11px;
+        padding: 0 0.4rem;
+        margin-right: 0.4rem;
+        border-radius: 0.6rem;
+        border: 1px solid #a7f;
+        color: #a7f;
+      }
+      mark {
+        background: #fd5;
+        color: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <form action="/">
+      <input name="q" placeholder="terms (all must match)" autofocus />
+      <input name="project" placeholder="project (cwd contains)" />
+      <input name="since" type="date" />
+      <button>Search</button>
+    </form>
+    <main></main>
+    <script type="module" src="./app.tsx"></script>
+  </body>
+</html>

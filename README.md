@@ -17,6 +17,7 @@ bunx github:sters/cc-session-archive sync        # import new lines (incremental
 bunx github:sters/cc-session-archive search 注文履歴 OrderItems --since 2026-10-01
 bunx github:sters/cc-session-archive sessions --project my-app
 bunx github:sters/cc-session-archive show <session-id>
+bunx github:sters/cc-session-archive web         # search and read sessions at http://localhost:7357
 ```
 
 `search` returns messages containing every term, newest first. Terms of one or two characters still match, but are
@@ -27,6 +28,7 @@ not served by the trigram index and scan the whole table.
 | `--project <text>`     | Only sessions whose cwd contains `<text>`                                     |
 | `--since <YYYY-MM-DD>` | Only messages (`search`) or sessions (`sessions`) at or after this local date |
 | `--limit <n>`          | Maximum rows (default: `search` 30, `sessions` 50)                            |
+| `--port <n>`           | Port for `web` (default: 7357). It listens on 127.0.0.1 only                  |
 
 | Environment             | Default                                                 |
 | ----------------------- | ------------------------------------------------------- |
