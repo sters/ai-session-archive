@@ -1,5 +1,5 @@
 {
-  "name": "cc-session-archive",
+  "name": "ai-session-archive",
   "version": "0.1.2",
   "description": "Search past Claude Code sessions through a local full-text index",
   "author": {

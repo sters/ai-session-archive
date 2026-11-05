@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "cc-session-archive",
+      "name": "ai-session-archive",
       "devDependencies": {
         "@types/bun": "^1.3.11",
       },
