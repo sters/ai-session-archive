@@ -1,5 +1,7 @@
 # Changelog
 
+## [v0.1.4](https://github.com/sters/ai-session-archive/compare/v0.1.3...v0.1.4) - 2026-11-05
+
 ## [v0.1.3](https://github.com/sters/ai-session-archive/compare/v0.1.2...v0.1.3) - 2026-11-05
 
 - Rename to ai-session-archive by @sters in https://github.com/sters/ai-session-archive/pull/4
