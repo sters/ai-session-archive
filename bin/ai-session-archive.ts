@@ -7,7 +7,7 @@ import { getSession, listSessions, local, search, snippet } from "../src/query";
 import { sync } from "../src/sync";
 import { serve } from "../src/web/server";
 
-const USAGE = `Usage: cc-session-archive <command> [options]
+const USAGE = `Usage: ai-session-archive <command> [options]
 
 Commands:
   sync                     Import new lines from the Claude Code transcripts
@@ -23,7 +23,7 @@ Options:
   --port <n>               Port for web (default: 7357)
 
 Environment:
-  CC_SESSION_ARCHIVE_DB    Database path (default: ~/.local/share/cc-session-archive/archive.sqlite)
+  AI_SESSION_ARCHIVE_DB    Database path (default: ~/.local/share/ai-session-archive/archive.sqlite)
   CLAUDE_CONFIG_DIR        Claude Code config dir holding projects/ (default: ~/.claude)`;
 
 const { values, positionals } = parseArgs({
@@ -43,7 +43,7 @@ if (values.help || !command) {
   process.exit(command || values.help ? 0 : 1);
 }
 
-const dbPath = process.env.CC_SESSION_ARCHIVE_DB ?? join(homedir(), ".local/share/cc-session-archive/archive.sqlite");
+const dbPath = process.env.AI_SESSION_ARCHIVE_DB ?? join(homedir(), ".local/share/ai-session-archive/archive.sqlite");
 const projectsDir = join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "projects");
 const db = openDb(dbPath);
 

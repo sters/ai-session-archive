@@ -1,14 +1,14 @@
 {
-  "name": "cc-session-archive",
+  "name": "ai-session-archive",
   "version": "0.1.2",
   "private": true,
   "type": "module",
   "bin": {
-    "cc-session-archive": "./bin/cc-session-archive.ts"
+    "ai-session-archive": "./bin/ai-session-archive.ts"
   },
   "scripts": {
     "test": "bun test",
-    "web": "bun bin/cc-session-archive.ts web"
+    "web": "bun bin/ai-session-archive.ts web"
   },
   "devDependencies": {
     "@types/bun": "^1.3.11"

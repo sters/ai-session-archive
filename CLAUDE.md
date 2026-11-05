@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Full-text search over Claude Code session transcripts. `sync` reads `~/.claude/projects/**/*.jsonl` (never writes to
 them) into a SQLite FTS5 index; `search`, `sessions` and `show` query it. The repository is also a Claude Code plugin
-marketplace whose `session-archive` skill runs the CLI through `bunx github:sters/cc-session-archive`.
+marketplace whose `session-archive` skill runs the CLI through `bunx github:sters/ai-session-archive`.
 
 ## Commands
 
@@ -17,12 +17,12 @@ bun check                            # type check
 bun lint                             # canary builds only
 bun fmt                              # canary builds only
 bun test
-bin/cc-session-archive.ts --help
+bin/ai-session-archive.ts --help
 ```
 
 ## Architecture
 
-- `bin/cc-session-archive.ts` — CLI: argument parsing and output formatting only.
+- `bin/ai-session-archive.ts` — CLI: argument parsing and output formatting only.
 - `src/sync.ts` — reads each transcript from `sessions.imported_bytes` up to the last complete line. A file that got
   shorter is re-imported from the start. Keeps user text, assistant text and tool calls (input truncated); drops tool
   results, thinking and `isMeta` lines. Transcript lines are untrusted input: every field is type-checked before use.
@@ -43,7 +43,7 @@ bin/cc-session-archive.ts --help
   commit messages, and it includes org and repo names, identifiers and file paths, ticket keys, internal tool or
   stack descriptions, and business-domain vocabulary. An example taken from a real session is rewritten into a
   neutral one (`acme/widgets`, `my-app`, users / orders, `PROJ-123`) before it lands; swapping only the org name is
-  not enough. The repository's own address (`sters/cc-session-archive`) and its author are the exception.
+  not enough. The repository's own address (`sters/ai-session-archive`) and its author are the exception.
 - **Never commit anything read from real transcripts or the database.** Fixtures are written by hand.
 - **`bun.lock` must not carry a registry URL.** A mirror configured in `~/.npmrc` gets recorded as each package's
   tarball URL and CI cannot reach it. After `bun install`, clear them:

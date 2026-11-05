@@ -1,4 +1,4 @@
-# cc-session-archive
+# ai-session-archive
 
 Full-text search over your Claude Code session transcripts.
 
@@ -13,11 +13,11 @@ substring without word segmentation.
 ## Usage
 
 ```bash
-bunx github:sters/cc-session-archive sync        # import new lines (incremental)
-bunx github:sters/cc-session-archive search 注文履歴 OrderItems --since 2026-10-01
-bunx github:sters/cc-session-archive sessions --project my-app
-bunx github:sters/cc-session-archive show <session-id>
-bunx github:sters/cc-session-archive web         # search and read sessions at http://localhost:7357
+bunx github:sters/ai-session-archive sync        # import new lines (incremental)
+bunx github:sters/ai-session-archive search 注文履歴 OrderItems --since 2026-10-01
+bunx github:sters/ai-session-archive sessions --project my-app
+bunx github:sters/ai-session-archive show <session-id>
+bunx github:sters/ai-session-archive web         # search and read sessions at http://localhost:7357
 ```
 
 `search` returns messages containing every term, newest first. Terms of one or two characters still match, but are
@@ -32,7 +32,7 @@ not served by the trigram index and scan the whole table.
 
 | Environment             | Default                                                 |
 | ----------------------- | ------------------------------------------------------- |
-| `CC_SESSION_ARCHIVE_DB` | `~/.local/share/cc-session-archive/archive.sqlite`      |
+| `AI_SESSION_ARCHIVE_DB` | `~/.local/share/ai-session-archive/archive.sqlite`      |
 | `CLAUDE_CONFIG_DIR`     | `~/.claude` (transcripts are read from its `projects/`) |
 
 `sync` reads each transcript from where it stopped last time, up to the last complete line, so it is cheap to run
@@ -50,7 +50,7 @@ Run `sync` when a session ends, from `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "bunx github:sters/cc-session-archive sync >/dev/null 2>&1"
+            "command": "bunx github:sters/ai-session-archive sync >/dev/null 2>&1"
           }
         ]
       }
@@ -68,8 +68,8 @@ This repository is a Claude Code plugin marketplace. Installing the plugin gives
 which runs the CLI through `bunx`:
 
 ```text
-/plugin marketplace add sters/cc-session-archive
-/plugin install cc-session-archive@cc-session-archive
+/plugin marketplace add sters/ai-session-archive
+/plugin install ai-session-archive@ai-session-archive
 ```
 
 The database holds whatever passed through your sessions, including command lines and anything pasted into them. Keep
