@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "./db";
 import { getSession, search } from "./query";
-import { sync } from "./sync";
+import { IMPORT_VERSION, strip, sync } from "./sync";
 
 let dir: string;
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -87,4 +87,70 @@ test("imports text and tool calls, appends incrementally, and finds Japanese sub
   await sync(db, dir);
   expect(getSession(db, "s1")[0]?.messages.map((m) => m.text)).toEqual(["rewritten"]);
   expect(search(db, ["原因"], { limit: 10 })).toEqual([]);
+});
+
+test("records keep activity metadata without text or tool output", async () => {
+  dir = mkdtempSync(join(tmpdir(), "csa-"));
+  mkdirSync(join(dir, "-work-repo"));
+  const main = join(dir, "-work-repo", "s1.jsonl");
+  const usage = { input_tokens: 3, output_tokens: 7, cache_read_input_tokens: 11 };
+  writeFileSync(
+    main,
+    line({
+      ...base,
+      type: "assistant",
+      timestamp: "2026-10-01T00:00:00Z",
+      message: {
+        id: "msg_1",
+        model: "claude-x",
+        usage,
+        content: [
+          { type: "text", text: "secret answer" },
+          { type: "tool_use", name: "Edit", input: { file_path: "/work/repo/a.ts", old_string: "secret" } },
+        ],
+      },
+    }) +
+      line({
+        ...base,
+        type: "user",
+        timestamp: "2026-10-01T00:00:01Z",
+        message: { content: [{ type: "tool_result", content: "secret output" }] },
+        toolUseResult: { filePath: "/work/repo/a.ts", structuredPatch: [{ lines: ["+secret", "-old", " ctx"] }] },
+      }) +
+      line({ type: "system", subtype: "turn_duration", durationMs: 1500, timestamp: "2026-10-01T00:00:02Z" }) +
+      line({ type: "cost-state", modelUsage: { "claude-x": { costUSD: 0.5 } } }) +
+      line({ type: "file-history-snapshot", snapshot: {} }),
+  );
+
+  const db = openDb(":memory:");
+  await sync(db, dir);
+  const data = db
+    .query<{ data: string }, []>("SELECT data FROM records ORDER BY id")
+    .all()
+    .map((r) => r.data);
+  expect(data).toHaveLength(4);
+  expect(data.join("\n")).not.toContain("secret");
+  expect(JSON.parse(data[0]!)).toMatchObject({
+    message: { id: "msg_1", model: "claude-x", usage, content: [{ type: "tool_use", name: "Edit" }] },
+  });
+  expect(JSON.parse(data[0]!)).toMatchObject({ cwd: "/work/repo", gitBranch: "main" });
+  expect(JSON.parse(data[1]!)).not.toHaveProperty("cwd");
+  expect(JSON.parse(data[1]!).toolUseResult.structuredPatch).toEqual([{ lines: ["+", "-", " "] }]);
+  expect(JSON.parse(data[2]!)).toMatchObject({ subtype: "turn_duration", durationMs: 1500 });
+  expect(JSON.parse(data[3]!)).toMatchObject({ modelUsage: { "claude-x": { costUSD: 0.5 } } });
+
+  db.run("UPDATE sessions SET import_version = 0");
+  db.run("DELETE FROM records");
+  expect(await sync(db, dir)).toMatchObject({ files: 1 });
+  expect(db.query("SELECT count(*) AS n FROM records").get()).toEqual({ n: 4 });
+  expect(db.query("SELECT import_version AS v FROM sessions").get()).toEqual({ v: IMPORT_VERSION });
+});
+
+test("strip cuts a created file down to its newlines", () => {
+  expect(
+    strip({ type: "user", toolUseResult: { type: "create", filePath: "/a", content: "x\ny\n" } } as never),
+  ).toEqual({
+    type: "user",
+    toolUseResult: { type: "create", filePath: "/a", content: "\n\n", structuredPatch: [] },
+  });
 });

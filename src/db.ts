@@ -22,6 +22,12 @@ export function openDb(path: string): Database {
     last_ts TEXT,
     imported_bytes INTEGER NOT NULL DEFAULT 0
   )`);
+  // Sessions imported by an older build have a lower import_version and are imported again by `sync`
+  // while their transcript still exists.
+  const columns = db.query<{ name: string }, []>("SELECT name FROM pragma_table_info('sessions')").all();
+  if (!columns.some((c) => c.name === "import_version")) {
+    db.run("ALTER TABLE sessions ADD COLUMN import_version INTEGER NOT NULL DEFAULT 0");
+  }
   db.run("CREATE INDEX IF NOT EXISTS sessions_id ON sessions(id)");
   db.run("CREATE INDEX IF NOT EXISTS sessions_parent ON sessions(parent_id)");
   db.run(`CREATE TABLE IF NOT EXISTS messages (
@@ -33,6 +39,16 @@ export function openDb(path: string): Database {
     text TEXT NOT NULL
   )`);
   db.run("CREATE INDEX IF NOT EXISTS messages_session ON messages(session, id)");
+  // One row per transcript line that carries metadata, in file order: the line as JSON with its text,
+  // tool input and tool output stripped (see `strip` in sync.ts). Token usage, cost-state and turn
+  // durations are kept as Claude Code wrote them.
+  db.run(`CREATE TABLE IF NOT EXISTS records (
+    id INTEGER PRIMARY KEY,
+    session INTEGER NOT NULL REFERENCES sessions(rowid),
+    ts TEXT,
+    data TEXT NOT NULL
+  )`);
+  db.run("CREATE INDEX IF NOT EXISTS records_session ON records(session, id)");
   // trigram so that Japanese, which has no word boundaries, matches by substring.
   db.run(`CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     text, content='messages', content_rowid='id', tokenize='trigram'

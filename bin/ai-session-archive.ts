@@ -14,13 +14,15 @@ Commands:
   search <term...>         Messages containing every term, newest first
   sessions                 Main sessions, newest first
   show <session-id>        Every message of a session, with its subagents listed
-  web                      Serve search and session pages on http://localhost:<port>
+  web                      Serve search, session and calendar pages on http://localhost:<port>,
+                           running sync every minute
 
 Options:
   --project <text>         Only sessions whose cwd contains <text>
   --since <YYYY-MM-DD>     Only messages (search) or sessions (sessions) at or after this local date
   --limit <n>              Maximum rows (default: search 30, sessions 50)
   --port <n>               Port for web (default: 7357)
+  --gap <minutes>          Idle time that splits a session into calendar events (default: 30)
 
 Environment:
   AI_SESSION_ARCHIVE_DB    Database path (default: ~/.local/share/ai-session-archive/archive.sqlite)
@@ -33,6 +35,7 @@ const { values, positionals } = parseArgs({
     since: { type: "string" },
     limit: { type: "string" },
     port: { type: "string" },
+    gap: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -98,8 +101,22 @@ switch (command) {
     break;
   }
   case "web": {
-    const server = serve(db, Number(values.port ?? 7357));
+    const server = serve(db, Number(values.port ?? 7357), Number(values.gap ?? 30) * 60_000);
     console.log(`listening on ${server.url}`);
+    let syncing = false;
+    const syncNow = async () => {
+      if (syncing) return;
+      syncing = true;
+      try {
+        await sync(db, projectsDir);
+      } catch (err) {
+        console.error("sync failed:", err);
+      } finally {
+        syncing = false;
+      }
+    };
+    void syncNow();
+    setInterval(() => void syncNow(), 60_000);
     break;
   }
   default:

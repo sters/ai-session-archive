@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Full-text search over Claude Code session transcripts. `sync` reads `~/.claude/projects/**/*.jsonl` (never writes to
-them) into a SQLite FTS5 index; `search`, `sessions` and `show` query it. The repository is also a Claude Code plugin
+Full-text search over Claude Code session transcripts, and a calendar of the time spent in them. `sync` reads
+`~/.claude/projects/**/*.jsonl` (never writes to them) into a SQLite FTS5 index plus per-line metadata; `search`,
+`sessions` and `show` query it, and `web` serves search, session and calendar pages. The repository is also a Claude Code plugin
 marketplace whose `session-archive` skill runs the CLI through `bunx github:sters/ai-session-archive`.
 
 ## Commands
@@ -26,13 +27,19 @@ bin/ai-session-archive.ts --help
 - `src/sync.ts` — reads each transcript from `sessions.imported_bytes` up to the last complete line. A file that got
   shorter is re-imported from the start. Keeps user text, assistant text and tool calls (input truncated); drops tool
   results, thinking and `isMeta` lines. Transcript lines are untrusted input: every field is type-checked before use.
+  `strip` also stores each metadata-bearing line in `records`, with text, tool input and tool output removed. Bump
+  `IMPORT_VERSION` when what is stored changes; sessions below it are imported again while their transcript exists.
 - `src/db.ts` — schema. `messages_fts` is an external-content FTS5 table with the trigram tokenizer, kept in sync by
   triggers, so Japanese matches by substring.
 - `src/query.ts` — search with `LIKE` on the FTS table (served by the trigram index for terms of three or more
   characters), session listing, and session detail.
-- `src/web/` — `web` command. `server.ts` serves JSON from `query.ts` and `index.html` as a Bun HTML import, which
-  bundles `app.tsx` at runtime. `app.tsx` builds DOM nodes with its own `h()` through the `@jsx` pragma, so there is
-  no React or other client dependency.
+- `src/calendar.ts` — splits sessions into calendar blocks from `records` (active turns, tokens, cost split, changed
+  lines, PRs), falling back to `messages` for sessions archived before `records` existed. Parsed sessions are cached in
+  memory and re-parsed when their `imported_bytes` change.
+- `src/web/` — `web` command, which also runs `sync` every minute. `server.ts` serves JSON from `query.ts` and
+  `calendar.ts`, and `index.html` and `calendar.html` as Bun HTML imports, which bundle `app.tsx` and `web/calendar.ts`
+  at runtime. Both build DOM nodes with their own `h()`, so there is no React. The one client library is FullCalendar
+  on the calendar page, loaded from jsDelivr.
 - `skills/session-archive/SKILL.md` and `.claude-plugin/` — the plugin. tagpr bumps the version in both
   `package.json` and `.claude-plugin/plugin.json`.
 

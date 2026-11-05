@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai-session-archive calendar</title>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.21/index.global.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --text: #1f2328;
+    --muted: #6b7280;
+    --line: #e5e5e2;
+    --chip: #f1f1ee;
+    --accent: #3b5bdb;
+    --add: #2f9e44;
+    --del: #e03131;
+    --fc-border-color: var(--line);
+    --fc-page-bg-color: var(--panel);
+    --fc-neutral-bg-color: #f1f1ee;
+    --fc-today-bg-color: #fff8e6;
+    --fc-now-indicator-color: #e03131;
+    --fc-button-bg-color: #ffffff;
+    --fc-button-border-color: var(--line);
+    --fc-button-text-color: var(--text);
+    --fc-button-hover-bg-color: #f1f1ee;
+    --fc-button-hover-border-color: var(--line);
+    --fc-button-active-bg-color: #e8ebfb;
+    --fc-button-active-border-color: #c5cdf5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --panel: #1e1f22;
+      --text: #e6e6e3;
+      --muted: #9a9ca3;
+      --line: #2f3135;
+      --chip: #2a2c30;
+      --accent: #8ea2ff;
+      --add: #69db7c;
+      --del: #ff8787;
+      --fc-neutral-bg-color: #26282c;
+      --fc-today-bg-color: #2a2720;
+      --fc-button-bg-color: #26282c;
+      --fc-button-hover-bg-color: #2f3135;
+      --fc-button-active-bg-color: #2c3350;
+      --fc-button-active-border-color: #3d4675;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  /* Elements toggled with the hidden attribute also set display, which would win over the browser default. */
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif;
+    display: grid;
+    grid-template-columns: 250px 1fr;
+  }
+  a { color: var(--accent); }
+  .num { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .add { color: var(--add); }
+  .del { color: var(--del); }
+
+  aside {
+    border-right: 1px solid var(--line);
+    padding: 16px 12px;
+    overflow-y: auto;
+  }
+  aside h1 { font-size: 14px; margin: 0 0 14px; }
+  aside h2 {
+    font-size: 11px; font-weight: 600; letter-spacing: .04em;
+    color: var(--muted); text-transform: uppercase; margin: 18px 0 8px;
+  }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+  .seg button {
+    flex: 1; border: 0; background: var(--panel); color: var(--text);
+    padding: 5px 0; font: inherit; cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--fc-button-active-bg-color); font-weight: 600; }
+  .toggle { display: flex; align-items: center; gap: 8px; padding: 0 2px; cursor: pointer; }
+  .toggle .count { margin-left: auto; color: var(--muted); }
+
+  .totals { display: grid; gap: 6px; }
+  .totals > div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; min-width: 0; }
+  .totals .k { font-size: 11px; color: var(--muted); }
+  /* fitValues() lowers the size from here until the value fits the card. */
+  .totals .v { font-size: 18px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; }
+  .est { color: var(--muted); font-size: 11px; font-weight: 400; margin-left: 4px; }
+
+  .projects { list-style: none; margin: 0; padding: 0; }
+  .projects li label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  }
+  .projects li label:hover { background: var(--fc-neutral-bg-color); }
+  .projects input { display: none; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .projects input:not(:checked) + .swatch { background: transparent !important; outline: 1.5px solid var(--muted); outline-offset: -1.5px; }
+  .projects input:not(:checked) ~ .name { color: var(--muted); text-decoration: line-through; }
+  .projects .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .projects .count { color: var(--muted); }
+
+  main { padding: 12px 16px; min-width: 0; height: 100vh; }
+  #calendar { height: 100%; }
+  .fc .fc-toolbar-title { font-size: 16px; font-weight: 600; }
+  .fc .fc-button { font-size: 12px; padding: 4px 10px; box-shadow: none !important; }
+  .fc .fc-timegrid-event { border-radius: 4px; }
+  .fc .fc-event-title { font-weight: 500; }
+  .fc-event { cursor: pointer; }
+  .fc .summary-event, .fc .summary-event:hover {
+    background: var(--chip) !important; border-color: var(--line) !important; cursor: default;
+  }
+  .fc .summary-event .fc-event-main { color: var(--text) !important; font-weight: 500; font-size: 11px; line-height: 1.35; padding: 1px 4px; white-space: normal; }
+  .fc .no-turns { background-image: repeating-linear-gradient(45deg, transparent 0 6px, rgb(255 255 255 / .18) 6px 12px); }
+
+  #detail {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 100vw);
+    background: var(--panel); border-left: 1px solid var(--line);
+    box-shadow: -8px 0 24px rgb(0 0 0 / .08);
+    padding: 20px; overflow-y: auto; z-index: 10;
+  }
+  #detail .close {
+    position: absolute; top: 14px; right: 14px; border: 0; background: none; color: var(--muted);
+    font-size: 18px; cursor: pointer; line-height: 1;
+  }
+  #detail h3 { font-size: 15px; margin: 0 28px 4px 0; }
+  #detail h4 {
+    font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--muted); margin: 18px 0 8px; padding-top: 12px; border-top: 1px solid var(--line);
+  }
+  #detail .when { color: var(--muted); }
+  #detail dl { display: grid; grid-template-columns: 96px 1fr; gap: 5px 12px; margin: 0; }
+  #detail dt { color: var(--muted); }
+  #detail dd { margin: 0; word-break: break-all; min-width: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { background: var(--chip); border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+  .chip .n { color: var(--muted); margin-left: 4px; }
+  .files { margin: 0; padding-left: 16px; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  details summary { cursor: pointer; color: var(--muted); margin-top: 4px; }
+  .table-wrap { overflow-x: auto; margin-top: 12px; }
+  table.usage { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.usage th, table.usage td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.usage th:first-child, table.usage td:first-child { text-align: left; }
+  table.usage th { color: var(--muted); font-weight: 500; }
+  .cmd {
+    display: flex; gap: 8px; align-items: stretch; margin-top: 16px;
+    background: var(--chip); border-radius: 6px; padding: 8px;
+  }
+  .cmd code { flex: 1; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .cmd button {
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    border-radius: 4px; padding: 0 10px; cursor: pointer; font-size: 12px;
+  }
+
+  .open-archive { display: block; margin-top: 12px; text-align: center; padding: 7px 0; border-radius: 6px; border: 1px solid var(--line); text-decoration: none; }
+  .open-archive:hover { background: var(--chip); }
+  aside nav { margin-bottom: 14px; font-size: 12px; }
+
+  @media (max-width: 720px) {
+    body { grid-template-columns: 1fr; }
+    aside { display: none; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Calendar</h1>
+  <nav><a href="/">Search sessions</a></nav>
+  <div class="seg" role="group" aria-label="Display unit">
+    <button type="button" data-mode="block">Blocks</button>
+    <button type="button" data-mode="active">Active spans</button>
+  </div>
+  <label class="toggle"><input type="checkbox" id="show-sdk"> Show SDK runs <span class="count num" id="sdk-count"></span></label>
+
+  <h2>This period</h2>
+  <div class="totals" id="totals"></div>
+
+  <h2>Projects</h2>
+  <ul class="projects" id="projects"></ul>
+</aside>
+<main><div id="calendar"></div></main>
+
+<section id="detail" hidden>
+  <button class="close" type="button" aria-label="Close">×</button>
+  <div id="detail-body"></div>
+</section>
+
+<script type="module" src="./calendar.ts"></script>
+</body>
+</html>
