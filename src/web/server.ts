@@ -2,9 +2,7 @@ import type { Database } from "bun:sqlite";
 import { eventsBetween, type Calendar } from "../calendar";
 import { getSession, listSessions, search, snippet, type Filter } from "../query";
 import { listSummaries, type Period } from "../summary";
-import calendarPage from "./calendar.html";
 import index from "./index.html";
-import summariesPage from "./summaries.html";
 
 function filter(p: URLSearchParams, defaultLimit: number): Filter {
   const since = p.get("since");
@@ -36,9 +34,10 @@ export function serve(db: Database, port: number, calendar: Calendar) {
     port,
     development: false,
     routes: {
+      // Every page is the one app; main.tsx picks the view from the path.
       "/": index,
-      "/calendar": calendarPage,
-      "/summaries": summariesPage,
+      "/calendar": index,
+      "/summaries": index,
       "/api/sessions": loopbackOnly((req) =>
         Response.json(listSessions(db, filter(new URL(req.url).searchParams, 100))),
       ),
