@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.1.7](https://github.com/sters/ai-session-archive/compare/v0.1.6...v0.1.7) - 2026-11-18
+
+- Scope recall to a project and summarize every session by @sters in https://github.com/sters/ai-session-archive/pull/11
+
 ## [v0.1.6](https://github.com/sters/ai-session-archive/compare/v0.1.5...v0.1.6) - 2026-11-18
 
 - Serve the web pages as one single-page app by @sters in https://github.com/sters/ai-session-archive/pull/9
