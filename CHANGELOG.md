@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.1.8](https://github.com/sters/ai-session-archive/compare/v0.1.7...v0.1.8) - 2026-11-18
+
+- Merge summaries into search and trim what recall prints by @sters in https://github.com/sters/ai-session-archive/pull/13
+
 ## [v0.1.7](https://github.com/sters/ai-session-archive/compare/v0.1.6...v0.1.7) - 2026-11-18
 
 - Scope recall to a project and summarize every session by @sters in https://github.com/sters/ai-session-archive/pull/11
