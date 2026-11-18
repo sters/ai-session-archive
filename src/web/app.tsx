@@ -59,11 +59,7 @@ function collapseToggle(): HTMLElement {
       d.open = !collapsed || d.classList.contains("hit");
     }
   });
-  return (
-    <label class="toggle">
-      {box} Collapse tool calls
-    </label>
-  );
+  return <label class="toggle">{box} Collapse tool calls</label>;
 }
 
 async function session(id: string) {
