@@ -26,17 +26,19 @@ bin/ai-session-archive.ts --help
 - `bin/ai-session-archive.ts` — CLI: argument parsing and output formatting only.
 - `src/sync.ts` — reads each transcript from `sessions.imported_bytes` up to the last complete line. A file that got
   shorter is re-imported from the start. Keeps user text, assistant text and tool calls (input truncated); drops tool
-  results, thinking and `isMeta` lines. Transcript lines are untrusted input: every field is type-checked before use.
+  results, thinking and `isMeta` lines. `userText` reduces a user line to what the user typed, and `openDb` applies it
+  once (`PRAGMA user_version` 1) to messages stored before it, since sessions whose transcript is gone cannot be
+  imported again. Transcript lines are untrusted input: every field is type-checked before use.
   `strip` also stores each metadata-bearing line in `records`, with text, tool input and tool output removed. Bump
   `IMPORT_VERSION` when what is stored changes; sessions below it are imported again while their transcript exists.
 - `src/db.ts` — schema. `messages_fts` is an external-content FTS5 table with the trigram tokenizer, kept in sync by
   triggers, so Japanese matches by substring.
-- `src/query.ts` — search with `LIKE` on the FTS table (served by the trigram index for terms of three or more
+- `src/query.ts` — message search with `LIKE` on the FTS table (served by the trigram index for terms of three or more
   characters), session listing, and session detail.
 - `src/calendar.ts` — splits sessions into calendar blocks from `records` (active turns, tokens, cost split, changed
   lines, PRs), falling back to `messages` for sessions archived before `records` existed. Parsed sessions are cached in
   memory and re-parsed when their `imported_bytes` change.
-- `src/summary.ts` — `summarize` and `summaries`. Writes day summaries from `messages`, and week and month summaries
+- `src/summary.ts` — `summarize`, `summaries`, and the summary sections that `search` lists among its message hits. Writes day summaries from `messages`, and week and month summaries
   from the day summaries, into `summaries` by running `claude -p` with hooks off. A day's sessions are written to a
   temp directory (`index.md` and `sessions/<id>.md`) that the model reads with Read, Grep and Glob under `dontAsk`,
   which confines them to that directory; weeks and months get their input on stdin and no tools. A month is built from days,

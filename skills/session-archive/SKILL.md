@@ -26,29 +26,56 @@ project.
 1. Run `sync` first, so the current and recently ended sessions are included. It reads only
    what was appended since the last run and recalculates the period figures, so it takes a
    few seconds at most.
-2. Find candidates with `search <term...> --project <owner>/<repo>`. Every term must appear in one
-   message; hits are newest first. Prefer distinctive terms: identifiers, ticket keys, error
-   strings, table names. Narrow further with `--since YYYY-MM-DD` and `--limit <n>`. Terms of
-   one or two characters work but scan the whole table.
-3. Read a hit in context with `show <session-id>`. Subagent sessions have ids starting with
-   `agent-` and are listed at the end of their parent's `show`.
-4. To recall the background of ongoing work in this project, list its sessions with
-   `sessions --project <owner>/<repo>` and read the summaries that mention it with
-   `summaries <owner>/<repo>`. Summaries cover every project of a period, so `--project`
-   does not apply to them; each is grouped under a heading per project, named
-   `<owner>/<repo>` or, for a directory outside a repository, by the directory. Read only that
-   project's part of each hit. Summaries written by an older version may name the project by
-   its full path or only its directory name, so search by the repository name alone when
-   `<owner>/<repo>` finds too little. A summary names the session ids that hold the details;
-   `show` them for the full exchange.
-5. For "what did I do in a period", read `summaries --period week --since YYYY-MM-DD` (also
-   `day` and `month`). Each entry starts with the period's figures (sessions, prompts, active
-   hours, cost, PRs, changed lines), which are calculated over every project and also exist
-   for the current period.
-6. Summaries exist only for days, weeks and months that have ended and have been summarized.
-   For today, or a period with no summary, list sessions with `sessions --since YYYY-MM-DD`
-   and `show` the ones whose titles matter. Do not run `summarize` yourself unless the user
-   asks: it calls `claude -p` once per period and takes a while.
+2. Start from what the question gives you:
+   - **A term** (an identifier, ticket key, error string, file or table name):
+     `search <term...> --project <owner>/<repo>`.
+   - **"What did I do lately / where did this stand"**, with no term: `sessions --project
+<owner>/<repo>` first. It lists the project's sessions most recently active first, each
+     with its time span, prompt count and title, which is usually enough to pick the sessions
+     that matter. Then read the latest day summaries' part on the project and the sessions'
+     prompts (step 3).
+   - **A period** ("last week", "in October"): `summaries --period week --since YYYY-MM-DD`
+     (also `day` and `month`). Each entry starts with the period's figures (sessions,
+     prompts, active hours, cost, PRs, changed lines), calculated over every project.
+3. Read only what you need, with `show`:
+   - `show <period>/<start> --project <owner>/<repo>` prints that project's part of a
+     summary (`show day/2026-10-01 --project acme/widgets`). A summary names the session ids
+     that hold the details.
+   - `show <session-id> --role <role,...>` keeps the messages of those roles: `user`,
+     `assistant`, `tool`, or `tool:<name>` for one tool (`tool:Bash` for the commands run).
+     `--role user` prints only what the user typed, which is what to read for what the user
+     asked for; add `--limit <n>` for the first n messages kept. A prompt sent twice shows
+     once, and the summary Claude Code wrote when it compacted the conversation shows as a line
+     naming its line range; that summary recounts the earlier conversation, so read it with
+     `--lines` (without `--role`) when the prompts alone do not tell the story. Without
+     `--role`, `show` prints the whole exchange, which can run to thousands of lines: read it a
+     range at a time.
+   - `show` numbers its lines, and `--lines <from>-<to>` (or `<from>-`) keeps part of them.
+     Lines left out by `--project` or `--role` keep their numbers, and the output ends with
+     the total line count when lines are left out.
+   - Subagent sessions have ids starting with `agent-` and are listed at the end of their
+     parent's `show`.
+
+`search` returns one list, newest first:
+
+- Messages of main sessions holding every term, up to `--limit` (30) and at most 3 per
+  session, followed by how many more that session has. A prompt is shown from its start, other
+  messages around the term. `--agents` adds subagent sessions, and `--role` keeps only some
+  roles, as in `show`.
+- Lines of day, week and month summaries holding every term, up to 10 sections. A summary
+  hit is named `<period>/<start>` with its section's line range (pass the range to
+  `--lines`) and is dated by the last day of its period, so the list reads from today's
+  messages back through yesterday's summary to older weeks. With `--project`, only the
+  sections under that project's heading.
+- Terms of one or two characters work but scan the whole table. Narrow with
+  `--since YYYY-MM-DD`.
+
+Summaries exist only for days, weeks and months that have ended and have been summarized;
+for today, use `sessions` and `show`. Summaries written by an older version may name the
+project by its full path or only its directory name, which `--project` does not match; drop
+`--project` and search by the repository name when that finds too little. Do not run
+`summarize` yourself unless the user asks: it calls `claude -p` once per period and takes a
+while.
 
 ## Keeping it current with a hook
 
