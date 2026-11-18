@@ -50,7 +50,7 @@ bin/ai-session-archive.ts --help
 - `src/totals.ts` — totals over calendar blocks for a time range (sessions, prompts, active time, cost, changed lines,
   PRs). The calendar page and `writeStats` in `summary.ts`, which `sync` runs to rewrite `period_stats`, both use it,
   so the stored figures match the page. It is bundled for the browser, so it imports types only.
-- `src/web/` — `web` command, which also runs `sync` every minute. `server.ts` serves JSON from `query.ts`,
+- `src/web/` — `web` command, which only reads the database. `server.ts` serves JSON from `query.ts`,
   `calendar.ts` and `summary.ts`, and one single-page app: `/`, `/summaries` and `/calendar` all return
   `index.html`, a Bun HTML import that bundles `main.tsx` at runtime and holds the CSS for every view. `main.tsx`
   routes by path to a view in `views/`, intercepts same-origin links and form submits with the History API, and

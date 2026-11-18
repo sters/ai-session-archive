@@ -23,7 +23,8 @@ bunx github:sters/ai-session-archive summaries --period week --since 2026-10-01
 bunx github:sters/ai-session-archive web         # search and read sessions at http://localhost:7357
 ```
 
-`web` also runs `sync` every minute while it is up, so the pages include sessions that are still running.
+`web` only reads the database. Run `sync` (or the `SessionEnd` hook below) to bring new sessions in; the pages
+pick them up without a restart.
 
 `search` returns, in one list newest first, the messages of main sessions containing every term (subagent sessions
 too with `--agents`) and the sections of stored summaries containing every term. A summary section is dated by the last
@@ -50,7 +51,7 @@ other agents) is left out.
 | `--period <day\|week\|month>` | Only summaries of this period (`summaries`)                                                                       |
 | `--model <model>`             | Model for `summarize` (default: `haiku`)                                                                          |
 | `--jobs <n>`                  | Summaries written at once by `summarize` (default: 4)                                                             |
-| `--summarize`                 | Also run `summarize` after each `sync` (`sync`, `web`)                                                            |
+| `--summarize`                 | Also run `summarize` after `sync` (`sync`)                                                                        |
 | `--port <n>`                  | Port for `web` (default: 7357). It listens on 127.0.0.1 only                                                      |
 | `--gap <minutes>`             | Idle time that splits a session into calendar events (default: 30)                                                |
 
@@ -123,10 +124,9 @@ recall past work through the skill without reading whole transcripts.
 - `summaries <term...>` prints the stored summaries containing every term, newest first. `--since` keeps the periods
   that end on or after the date, so the week or month containing it is included.
 
-To keep them current, pass `--summarize` to `sync` or `web`, and `summarize` runs after each sync. `web` runs it apart
-from the minute-by-minute sync, so a long first run does not hold sync back; after that it makes calls only once a
-day has ended. In the `SessionEnd` hook below, run it in the background, because writing a summary takes longer than
-a hook is given:
+To keep them current, pass `--summarize` to `sync`, and `summarize` runs after it. After the first run it makes calls
+only once a day has ended. In the `SessionEnd` hook below, run it in the background, because writing a summary takes
+longer than a hook is given:
 
 ```json
 "command": "bunx github:sters/ai-session-archive sync --summarize >/dev/null 2>&1 &"
