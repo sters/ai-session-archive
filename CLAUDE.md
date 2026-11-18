@@ -47,11 +47,15 @@ bin/ai-session-archive.ts --help
   PRs). The calendar page and `writeStats` in `summary.ts`, which `sync` runs to rewrite `period_stats`, both use it,
   so the stored figures match the page. It is bundled for the browser, so it imports types only.
 - `src/web/` — `web` command, which also runs `sync` every minute. `server.ts` serves JSON from `query.ts`,
-  `calendar.ts` and `summary.ts`, and `index.html`, `summaries.html` and `calendar.html` as Bun HTML imports, which
-  bundle `app.tsx`, `summaries.tsx` and `web/calendar.ts` at runtime. They build DOM nodes with `h()` (`h.tsx`, and
-  `web/calendar.ts`'s own), so there is no React. `summaries.tsx` renders summary Markdown to DOM nodes, never
-  `innerHTML`, since the text comes from transcripts. The one client library is FullCalendar
-  on the calendar page, loaded from jsDelivr.
+  `calendar.ts` and `summary.ts`, and one single-page app: `/`, `/summaries` and `/calendar` all return
+  `index.html`, a Bun HTML import that bundles `main.tsx` at runtime and holds the CSS for every view. `main.tsx`
+  routes by path to a view in `views/`, intercepts same-origin links and form submits with the History API, and
+  restores each history entry's scroll. A view is a `View` from `h.tsx`: it fetches with the `AbortSignal` it is
+  given, which aborts when the app leaves the view, so that is also where a view stops its timers and listeners.
+  Views build DOM nodes with `h()` (`h.tsx`; `onX` function props become listeners), so there is no React.
+  `views/summaries.tsx` renders summary Markdown to DOM nodes, never `innerHTML`, since the text comes from
+  transcripts. The one client library is FullCalendar, which `views/calendar.tsx` loads from jsDelivr the first time
+  the calendar is opened.
 - `skills/session-archive/SKILL.md` and `.claude-plugin/` — the plugin. tagpr bumps the version in both
   `package.json` and `.claude-plugin/plugin.json`.
 

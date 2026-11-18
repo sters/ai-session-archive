@@ -1,11 +1,8 @@
 /// <reference lib="dom" />
 /** @jsx h */
-import type { Summary } from "../summary";
-import { statsLine } from "../totals";
-import { h, highlight, type Child } from "./h";
-
-const params = new URLSearchParams(location.search);
-const terms = (params.get("q") ?? "").split(/\s+/).filter(Boolean);
+import type { Summary } from "../../summary";
+import { statsLine } from "../../totals";
+import { getJSON, h, highlight, termsOf, type Child, type View } from "../h";
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INLINE = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)\s]+\)|https?:\/\/[^\s)）」]+)/;
@@ -21,7 +18,7 @@ function link(href: string, label: Child): Child {
   );
 }
 
-function inline(text: string): Child[] {
+function inline(text: string, terms: string[]): Child[] {
   return text.split(INLINE).map((part, i) => {
     if (i % 2 === 0) return highlight(part, terms);
     if (part.startsWith("`")) {
@@ -29,22 +26,22 @@ function inline(text: string): Child[] {
       const inner = <code>{highlight(code, terms)}</code>;
       return SESSION_ID.test(code) ? <a href={`/?s=${code}`}>{inner}</a> : inner;
     }
-    if (part.startsWith("**")) return <b>{inline(part.slice(2, -2))}</b>;
+    if (part.startsWith("**")) return <b>{inline(part.slice(2, -2), terms)}</b>;
     const md = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
-    if (md) return link(md[2]!, inline(md[1]!));
+    if (md) return link(md[2]!, inline(md[1]!, terms));
     return link(part, part);
   });
 }
 
 // The Markdown that summaries are written in: headings, nested lists, tables, fenced code, rules and paragraphs.
-function markdown(src: string): HTMLElement {
+function markdown(src: string, terms: string[]): HTMLElement {
   const root = <div class="body" />;
   const lines = src.split("\n");
   // Open lists, innermost last, with the indent of their items.
   let lists: { el: HTMLElement; indent: number }[] = [];
   let para: string[] = [];
   const flush = () => {
-    if (para.length) root.append(<p>{inline(para.join(" "))}</p>);
+    if (para.length) root.append(<p>{inline(para.join(" "), terms)}</p>);
     para = [];
   };
   for (let i = 0; i < lines.length; i++) {
@@ -60,12 +57,12 @@ function markdown(src: string): HTMLElement {
         (lists.at(-1)?.el.lastElementChild ?? root).append(list);
         lists.push({ el: list, indent });
       }
-      lists.at(-1)!.el.append(<li>{inline(item[3]!)}</li>);
+      lists.at(-1)!.el.append(<li>{inline(item[3]!, terms)}</li>);
       continue;
     }
     // A non-blank line indented under a list item continues it.
     if (lists.length && /^\s+\S/.test(line)) {
-      lists.at(-1)!.el.lastElementChild?.append(h("span", null, " ", inline(line.trim())));
+      lists.at(-1)!.el.lastElementChild?.append(h("span", null, " ", inline(line.trim(), terms)));
       continue;
     }
     lists = [];
@@ -83,7 +80,7 @@ function markdown(src: string): HTMLElement {
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
       flush();
-      root.append(h(`h${Math.min(6, heading[1]!.length + 2)}`, null, inline(heading[2]!)));
+      root.append(h(`h${Math.min(6, heading[1]!.length + 2)}`, null, inline(heading[2]!, terms)));
       continue;
     }
     if (/^\s*\|/.test(line)) {
@@ -99,12 +96,12 @@ function markdown(src: string): HTMLElement {
       i--;
       const [head, ...body] = rows;
       root.append(
-        <div class="table">
+        <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 {head?.map((c) => (
-                  <th>{inline(c)}</th>
+                  <th>{inline(c, terms)}</th>
                 ))}
               </tr>
             </thead>
@@ -112,7 +109,7 @@ function markdown(src: string): HTMLElement {
               {body.map((r) => (
                 <tr>
                   {r.map((c) => (
-                    <td>{inline(c)}</td>
+                    <td>{inline(c, terms)}</td>
                   ))}
                 </tr>
               ))}
@@ -145,36 +142,47 @@ function label(s: Summary): string {
   return `${s.start} – ${end.toLocaleDateString("sv-SE")}`;
 }
 
-const form = document.querySelector("form")!;
-for (const name of ["q", "since", "period"]) {
-  (form.elements.namedItem(name) as HTMLInputElement).value = params.get(name) ?? "";
-}
-
-const main = document.querySelector("main")!;
-try {
-  const res = await fetch(`/api/summaries?${params}`);
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  const rows: Summary[] = await res.json();
-  if (rows.length === 0) main.append(<p>No summaries. Run `summarize`, or `sync --summarize`.</p>);
-  rows.forEach((s, i) =>
-    main.append(
-      <article>
-        <details open={i === 0 || terms.length > 0}>
-          <summary>
-            <span class={`period ${s.period}`}>{s.period}</span>
-            {label(s)}{" "}
-            {s.model && s.created_at && (
-              <span class="meta">
-                {s.model} · {new Date(s.created_at).toLocaleString()}
-              </span>
-            )}
-            {s.stats && <div class="stats">{statsLine(s.stats)}</div>}
-          </summary>
-          {s.text ? markdown(s.text) : <p class="meta">Not summarized yet.</p>}
-        </details>
-      </article>,
+export const summaries: View = async (params, signal) => {
+  const terms = termsOf(params);
+  const rows = await getJSON<Summary[]>(`/api/summaries?${params}`, signal);
+  const select = (
+    <select name="period">
+      <option value="">All periods</option>
+      <option value="day">Day</option>
+      <option value="week">Week</option>
+      <option value="month">Month</option>
+    </select>
+  ) as HTMLSelectElement;
+  select.value = params.get("period") ?? "";
+  return {
+    title: "ai-session-archive summaries",
+    body: (
+      <div class="page summaries">
+        <form action="/summaries">
+          {select}
+          <input name="q" placeholder="terms (all must match)" value={params.get("q") ?? ""} />
+          <input name="since" type="date" value={params.get("since") ?? ""} />
+          <button>Show</button>
+        </form>
+        {rows.length === 0 && <p>No summaries. Run `summarize`, or `sync --summarize`.</p>}
+        {rows.map((s, i) => (
+          <article>
+            <details open={i === 0 || terms.length > 0}>
+              <summary>
+                <span class={`period ${s.period}`}>{s.period}</span>
+                {label(s)}{" "}
+                {s.model && s.created_at && (
+                  <span class="meta">
+                    {s.model} · {new Date(s.created_at).toLocaleString()}
+                  </span>
+                )}
+                {s.stats && <div class="stats">{statsLine(s.stats)}</div>}
+              </summary>
+              {s.text ? markdown(s.text, terms) : <p class="meta">Not summarized yet.</p>}
+            </details>
+          </article>
+        ))}
+      </div>
     ),
-  );
-} catch (e) {
-  main.append(<p>{String(e)}</p>);
-}
+  };
+};

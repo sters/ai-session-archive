@@ -6,40 +6,172 @@
     <title>ai-session-archive</title>
     <style>
       :root {
-        color-scheme: light dark;
+        --bg: #f7f7f5;
+        --panel: #ffffff;
+        --text: #1f2328;
+        --muted: #6b7280;
+        --line: #e5e5e2;
+        --chip: #f1f1ee;
+        --accent: #3b5bdb;
+        --add: #2f9e44;
+        --del: #e03131;
+        --user: #4a8;
+        --badge: #a7f;
+        --week: #48c;
+        --fc-border-color: var(--line);
+        --fc-page-bg-color: var(--panel);
+        --fc-neutral-bg-color: #f1f1ee;
+        --fc-today-bg-color: #fff8e6;
+        --fc-now-indicator-color: #e03131;
+        --fc-button-bg-color: #ffffff;
+        --fc-button-border-color: var(--line);
+        --fc-button-text-color: var(--text);
+        --fc-button-hover-bg-color: #f1f1ee;
+        --fc-button-hover-border-color: var(--line);
+        --fc-button-active-bg-color: #e8ebfb;
+        --fc-button-active-border-color: #c5cdf5;
+        --mono: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #17181a;
+          --panel: #1e1f22;
+          --text: #e6e6e3;
+          --muted: #9a9ca3;
+          --line: #2f3135;
+          --chip: #2a2c30;
+          --accent: #8ea2ff;
+          --add: #69db7c;
+          --del: #ff8787;
+          --fc-neutral-bg-color: #26282c;
+          --fc-today-bg-color: #2a2720;
+          --fc-button-bg-color: #26282c;
+          --fc-button-hover-bg-color: #2f3135;
+          --fc-button-active-bg-color: #2c3350;
+          --fc-button-active-border-color: #3d4675;
+          color-scheme: dark;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      /* Elements toggled with the hidden attribute also set display, which would win over the browser default. */
+      [hidden] {
+        display: none !important;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      /* #app is the scroll container, so that the calendar can take exactly the height below the header. */
+      body {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--text);
         font:
-          14px/1.5 system-ui,
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Hiragino Sans",
+          "Segoe UI",
           sans-serif;
       }
-      body {
+      #app {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .view {
+        height: 100%;
+      }
+      a {
+        color: var(--accent);
+      }
+      mark {
+        background: #fd5;
+        color: #000;
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+      }
+      .muted,
+      .meta {
+        color: var(--muted);
+      }
+      .meta {
+        font-size: 12px;
+        font-weight: normal;
+      }
+      .add {
+        color: var(--add);
+      }
+      .del {
+        color: var(--del);
+      }
+      .error {
+        color: var(--del);
+        padding: 0 1rem;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.5rem 1rem;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      header b {
+        font-size: 13px;
+      }
+      header nav {
+        display: flex;
+        gap: 0.25rem;
+      }
+      header nav a {
+        padding: 0.15rem 0.6rem;
+        border-radius: 6px;
+        color: var(--text);
+        text-decoration: none;
+      }
+      header nav a:hover {
+        background: var(--chip);
+      }
+      header nav a[aria-current="page"] {
+        background: var(--fc-button-active-bg-color);
+        font-weight: 600;
+      }
+
+      .page {
         max-width: 72rem;
         margin: 0 auto;
         padding: 1rem;
       }
-      form {
+      .page form {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: 0.5rem;
         margin-bottom: 1rem;
       }
-      input[name="q"] {
+      .page input[name="q"] {
         flex: 1 1 20rem;
       }
-      input,
-      button {
+      .page input,
+      .page select,
+      .page button {
         font: inherit;
         padding: 0.3rem 0.5rem;
       }
-      .meta {
-        color: GrayText;
-        font-size: 12px;
-      }
+
+      /* Search and session */
       .row {
         padding: 0.5rem 0;
-        border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+        border-bottom: 1px solid var(--line);
       }
-      pre {
+      .msg pre {
         white-space: pre-wrap;
         word-break: break-word;
         margin: 0.25rem 0 0;
@@ -48,54 +180,466 @@
       .msg {
         margin: 1rem 0;
       }
-      .user {
-        border-left: 3px solid #4a8;
+      .msg.user {
+        border-left: 3px solid var(--user);
         padding-left: 0.5rem;
       }
-      .tool pre {
-        color: GrayText;
+      .msg.tool pre {
+        color: var(--muted);
       }
       details.msg {
         margin: 0.25rem 0;
       }
-      summary {
+      details.msg > summary {
         cursor: pointer;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .toggle {
+      .collapse {
         display: block;
         margin-top: 1rem;
         position: sticky;
         top: 0;
         padding: 0.25rem 0;
-        background: Canvas;
+        background: var(--bg);
       }
       .badge {
         font-size: 11px;
         padding: 0 0.4rem;
         margin-right: 0.4rem;
         border-radius: 0.6rem;
-        border: 1px solid #a7f;
-        color: #a7f;
+        border: 1px solid var(--badge);
+        color: var(--badge);
       }
-      mark {
-        background: #fd5;
-        color: #000;
+
+      /* Summaries */
+      .summaries {
+        max-width: 60rem;
+        line-height: 1.6;
+      }
+      .summaries article {
+        border-bottom: 1px solid var(--line);
+        padding: 0.5rem 0 1rem;
+      }
+      .summaries article summary {
+        cursor: pointer;
+        font-size: 1.15rem;
+        font-weight: 600;
+        padding: 0.25rem 0;
+      }
+      .stats {
+        font-size: 13px;
+        font-weight: normal;
+        font-variant-numeric: tabular-nums;
+        margin: 0.25rem 0 0.5rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+        background: var(--chip);
+      }
+      .period {
+        font-size: 11px;
+        padding: 0 0.45rem;
+        margin-right: 0.5rem;
+        border-radius: 0.6rem;
+        border: 1px solid currentColor;
+        vertical-align: 2px;
+      }
+      .period.day {
+        color: var(--user);
+      }
+      .period.week {
+        color: var(--week);
+      }
+      .period.month {
+        color: var(--badge);
+      }
+      .body h3 {
+        font-size: 1.05rem;
+        margin: 1.2rem 0 0.4rem;
+      }
+      .body h4,
+      .body h5,
+      .body h6 {
+        font-size: 1rem;
+        margin: 1rem 0 0.3rem;
+      }
+      .body p,
+      .body ul,
+      .body ol {
+        margin: 0.4rem 0;
+      }
+      .body ul,
+      .body ol {
+        padding-left: 1.4rem;
+      }
+      .body code {
+        font-size: 12.5px;
+        padding: 0 0.2rem;
+        border-radius: 3px;
+        background: var(--chip);
+        word-break: break-all;
+      }
+      .body pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        padding: 0.5rem;
+        background: var(--chip);
+      }
+      .body pre code {
+        background: none;
+        padding: 0;
+      }
+      .body table {
+        border-collapse: collapse;
+        margin: 0.5rem 0;
+      }
+      .body th,
+      .body td {
+        border: 1px solid var(--line);
+        padding: 0.2rem 0.5rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      /* Calendar */
+      .calendar-view {
+        display: grid;
+        grid-template-columns: 250px 1fr;
+        height: 100%;
+        font-size: 13px;
+      }
+      .calendar-view aside {
+        border-right: 1px solid var(--line);
+        padding: 16px 12px;
+        overflow-y: auto;
+      }
+      .calendar-view aside h2 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin: 18px 0 8px;
+      }
+      .seg {
+        display: flex;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 10px;
+      }
+      .seg button {
+        flex: 1;
+        border: 0;
+        background: var(--panel);
+        color: var(--text);
+        padding: 5px 0;
+        font: inherit;
+        cursor: pointer;
+      }
+      .seg button + button {
+        border-left: 1px solid var(--line);
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--fc-button-active-bg-color);
+        font-weight: 600;
+      }
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 2px;
+        cursor: pointer;
+      }
+      .toggle .count {
+        margin-left: auto;
+        color: var(--muted);
+      }
+
+      .totals {
+        display: grid;
+        gap: 6px;
+      }
+      .totals > div {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 10px;
+        min-width: 0;
+      }
+      .totals .k {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      /* fitValues() lowers the size from here until the value fits the card. */
+      .totals .v {
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .est {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 400;
+        margin-left: 4px;
+      }
+
+      .projects {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .projects li label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .projects li label:hover {
+        background: var(--fc-neutral-bg-color);
+      }
+      .projects input {
+        display: none;
+      }
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .projects input:not(:checked) + .swatch {
+        background: transparent !important;
+        outline: 1.5px solid var(--muted);
+        outline-offset: -1.5px;
+      }
+      .projects input:not(:checked) ~ .name {
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+      .projects .name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .projects .count {
+        color: var(--muted);
+      }
+
+      .calendar-main {
+        padding: 12px 16px;
+        min-width: 0;
+        min-height: 0;
+      }
+      .fc-host {
+        height: 100%;
+      }
+      .fc .fc-toolbar-title {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .fc .fc-button {
+        font-size: 12px;
+        padding: 4px 10px;
+        box-shadow: none !important;
+      }
+      .fc .fc-timegrid-event {
+        border-radius: 4px;
+      }
+      .fc .fc-event-title {
+        font-weight: 500;
+      }
+      .fc-event {
+        cursor: pointer;
+      }
+      .fc .summary-event,
+      .fc .summary-event:hover {
+        background: var(--chip) !important;
+        border-color: var(--line) !important;
+        cursor: default;
+      }
+      .fc .summary-event .fc-event-main {
+        color: var(--text) !important;
+        font-weight: 500;
+        font-size: 11px;
+        line-height: 1.35;
+        padding: 1px 4px;
+        white-space: normal;
+      }
+      .fc .no-turns {
+        background-image: repeating-linear-gradient(45deg, transparent 0 6px, rgb(255 255 255 / 0.18) 6px 12px);
+      }
+
+      #detail {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(460px, 100vw);
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        box-shadow: -8px 0 24px rgb(0 0 0 / 0.08);
+        padding: 20px;
+        overflow-y: auto;
+        z-index: 10;
+      }
+      #detail .close {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 18px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      #detail h3 {
+        font-size: 15px;
+        margin: 0 28px 4px 0;
+      }
+      #detail h4 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 18px 0 8px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+      #detail .when {
+        color: var(--muted);
+      }
+      #detail dl {
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        gap: 5px 12px;
+        margin: 0;
+      }
+      #detail dt {
+        color: var(--muted);
+      }
+      #detail dd {
+        margin: 0;
+        word-break: break-all;
+        min-width: 0;
+      }
+      #detail details summary {
+        cursor: pointer;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      #detail .table-wrap {
+        margin-top: 12px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .chip {
+        background: var(--chip);
+        border-radius: 4px;
+        padding: 1px 6px;
+        font-size: 12px;
+      }
+      .chip .n {
+        color: var(--muted);
+        margin-left: 4px;
+      }
+      .files {
+        margin: 0;
+        padding-left: 16px;
+        font: var(--mono);
+        word-break: break-all;
+      }
+      table.usage {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.usage th,
+      table.usage td {
+        text-align: right;
+        padding: 3px 4px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      table.usage th:first-child,
+      table.usage td:first-child {
+        text-align: left;
+      }
+      table.usage th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .cmd {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        margin-top: 16px;
+        background: var(--chip);
+        border-radius: 6px;
+        padding: 8px;
+      }
+      .cmd code {
+        flex: 1;
+        font: var(--mono);
+        line-height: 1.5;
+        word-break: break-all;
+      }
+      .cmd button {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        border-radius: 4px;
+        padding: 0 10px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .open-archive {
+        display: block;
+        margin-top: 12px;
+        text-align: center;
+        padding: 7px 0;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        text-decoration: none;
+      }
+      .open-archive:hover {
+        background: var(--chip);
+      }
+
+      @media (max-width: 720px) {
+        .calendar-view {
+          grid-template-columns: 1fr;
+        }
+        .calendar-view aside {
+          display: none;
+        }
       }
     </style>
   </head>
   <body>
-    <form action="/">
-      <input name="q" placeholder="terms (all must match)" autofocus />
-      <input name="project" placeholder="project (cwd contains)" />
-      <input name="since" type="date" />
-      <button>Search</button>
-      <a href="/summaries">Summaries</a>
-      <a href="/calendar">Calendar</a>
-    </form>
-    <main></main>
-    <script type="module" src="./app.tsx"></script>
+    <header>
+      <b>ai-session-archive</b>
+      <nav>
+        <a href="/">Search</a>
+        <a href="/summaries">Summaries</a>
+        <a href="/calendar">Calendar</a>
+      </nav>
+    </header>
+    <div id="app"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>
