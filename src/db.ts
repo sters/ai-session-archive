@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { userText } from "./sync";
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -85,5 +86,30 @@ export function openDb(path: string): Database {
   db.run(`CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
     INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.id, old.text);
   END`);
+  // user_version 1: user messages hold only what the user typed (see `userText`), also in sessions whose
+  // transcript is gone and that cannot be imported again.
+  if (db.query<{ user_version: number }, []>("PRAGMA user_version").get()!.user_version < 1) {
+    const rows = db
+      .query<{ id: number; text: string }, []>("SELECT id, text FROM messages WHERE role = 'user' AND text LIKE '<%'")
+      .all();
+    const remove = db.query("DELETE FROM messages WHERE id = ?");
+    const unindex = db.query("INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', ?, ?)");
+    const update = db.query("UPDATE messages SET text = ? WHERE id = ?");
+    const index = db.query("INSERT INTO messages_fts(rowid, text) VALUES (?, ?)");
+    db.transaction(() => {
+      for (const r of rows) {
+        const typed = userText(r.text);
+        if (typed === r.text) continue;
+        if (typed === null) {
+          remove.run(r.id);
+          continue;
+        }
+        unindex.run(r.id, r.text);
+        update.run(typed, r.id);
+        index.run(r.id, typed);
+      }
+      db.run("PRAGMA user_version = 1");
+    })();
+  }
   return db;
 }

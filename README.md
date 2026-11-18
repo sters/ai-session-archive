@@ -25,8 +25,22 @@ bunx github:sters/ai-session-archive web         # search and read sessions at h
 
 `web` also runs `sync` every minute while it is up, so the pages include sessions that are still running.
 
-`search` returns messages containing every term, newest first. Terms of one or two characters still match, but are
-not served by the trigram index and scan the whole table.
+`search` returns, in one list newest first, the messages of main sessions containing every term (subagent sessions
+too with `--agents`) and the sections of stored summaries containing every term. A summary section is dated by the last
+day of its period and shows only the lines holding a term, numbered as in the whole summary. Messages are limited by
+`--limit` and to 3 per session, followed by how many more the session has; a prompt is shown from its start. Summary
+sections are limited to 10; with `--project`, they are those under a heading naming the project.
+Terms of one or two characters still match, but are not served by the trigram index and scan the whole table.
+
+`sessions` lists the most recently active sessions first, with their time span and prompt count. `show` prints a
+session, or a summary named `<period>/<start>`, with numbered lines; `--lines <from>-<to>` keeps part of it, `--project`
+a project's sections of a summary, and `--role user,assistant,tool` (or `tool:<name>`) the messages of those roles
+(`--limit <n>` for the first n), all keeping the line numbers. Under `--role`, a prompt repeated unchanged is shown
+once, and a compaction summary as a line naming its range. `search` takes `--role` too. A session without a title is listed by its first prompt.
+
+A user message holds what the user typed: a slash command is stored as `/name args` and a `!` shell command as
+`! command`, and what Claude Code writes into user lines itself (task notifications, command output, messages from
+other agents) is left out.
 
 | Option                        | Meaning                                                                                                           |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |

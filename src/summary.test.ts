@@ -4,7 +4,16 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
 import type { Block, CalendarSession } from "./calendar";
-import { listSummaries, lock, summarize, writeStats, type Period } from "./summary";
+import {
+  getSummary,
+  listSummaries,
+  lock,
+  searchSummaries,
+  sections,
+  summarize,
+  writeStats,
+  type Period,
+} from "./summary";
 
 // Around noon UTC, so that the local date is the same whether it is read by JavaScript (UTC under
 // `bun test`) or by SQLite's 'localtime' (the system time zone) in any zone within ±11 hours.
@@ -160,4 +169,55 @@ test("lock lets one process in at a time and takes over a lock whose process is 
   writeFileSync(path, "");
   expect(lock(path)).toEqual({ heldBy: 0 });
   rmSync(dirname(path), { recursive: true });
+});
+
+test("searchSummaries returns the matching lines of the project's sections, newest period first", () => {
+  const { db } = fixture();
+  const put = (period: Period, start: string, text: string) =>
+    db
+      .query("INSERT INTO summaries (period, start, text, source, model, created_at) VALUES (?, ?, ?, '', '', '')")
+      .run(period, start, text);
+  put(
+    "day",
+    "2026-10-05",
+    [
+      "# 2026-10-05",
+      "## acme/widgets",
+      "- a",
+      "- b",
+      "- c",
+      "- Retry on deploy",
+      "- d",
+      "- e",
+      "- f",
+      "## acme/widgets-old",
+      "- deploy again",
+    ].join("\n"),
+  );
+  put("week", "2026-09-28", "## acme/widgets（api）\n- deploy pipeline\n- other");
+  put("day", "2026-10-01", "- deploy without headings");
+
+  const hits = (project?: string) => searchSummaries(db, ["DEPLOY"], { project, limit: 10 });
+  expect(hits("acme/widgets").map((h) => `${h.lastDay} ${h.period}\n${h.lines}`)).toEqual([
+    "2026-10-05 day\n6: - Retry on deploy",
+    "2026-10-04 week\n2: - deploy pipeline",
+  ]);
+  expect(hits()).toHaveLength(4);
+  expect(searchSummaries(db, ["deploy"], { since: "2026-10-04", limit: 10 }).map((h) => h.period)).toEqual([
+    "day",
+    "day",
+    "week",
+  ]);
+  expect(getSummary(db, "week", "2026-09-28")).toContain("deploy pipeline");
+  expect(hits("acme/widgets").map((h) => [h.from, h.to])).toEqual([
+    [2, 9],
+    [1, 3],
+  ]);
+  const lines = getSummary(db, "day", "2026-10-05")!.split("\n");
+  expect(sections(lines)).toEqual([
+    [0, 1],
+    [1, 9],
+    [9, 11],
+  ]);
+  expect(sections(lines, "acme/widgets-old")).toEqual([[9, 11]]);
 });

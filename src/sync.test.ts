@@ -3,8 +3,8 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "./db";
-import { getSession, listSessions, search } from "./query";
-import { IMPORT_VERSION, strip, sync } from "./sync";
+import { getSession, listSessions, matchesRole, search } from "./query";
+import { IMPORT_VERSION, strip, sync, userText } from "./sync";
 
 let dir: string;
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -66,12 +66,20 @@ test("imports text and tool calls, appends incrementally, and finds Japanese sub
   expect(search(db, ["原因"], { limit: 10 }).map((h) => h.text)).toEqual(["原因を切り分けます"]);
   expect(search(db, ["表示さ"], { limit: 10 })[0]?.role).toBe("user");
   expect(search(db, ["OrderItems"], { limit: 10 })[0]?.tool).toBe("Bash");
+  expect(search(db, ["OrderItems"], { limit: 10, roles: ["tool:Bash"] })).toHaveLength(1);
+  expect(search(db, ["OrderItems"], { limit: 10, roles: ["user", "tool:Read"] })).toEqual([]);
+  expect(matchesRole(["user", "tool:Bash"], { role: "tool", tool: "Bash" })).toBe(true);
+  expect(matchesRole(["tool"], { role: "tool", tool: "Read" })).toBe(true);
+  expect(matchesRole(["tool:Bash"], { role: "assistant", tool: null })).toBe(false);
   expect(search(db, ["huge output"], { limit: 10 })).toEqual([]);
   expect(search(db, ["skill body"], { limit: 10 })).toEqual([]);
 
   const [s] = getSession(db, "s1");
   expect(s?.session).toMatchObject({ title: "履歴の調査", cwd: "/work/repo", git_branch: "main" });
   expect(s?.subagents).toMatchObject([{ id: "agent-a1", parent_id: "s1", agent_type: "Explore" }]);
+  expect(search(db, ["subagent report"], { limit: 10 })).toEqual([]);
+  expect(search(db, ["subagent report"], { limit: 10, agents: true })).toHaveLength(1);
+  expect(listSessions(db, { limit: 10 })).toMatchObject([{ id: "s1", prompts: 1 }]);
 
   expect(await sync(db, dir)).toEqual({ files: 0, messages: 0 });
 
@@ -184,9 +192,45 @@ test("--project matches whole path segments of any cwd a session was in", async 
   expect(ids("acme/widgets")).toEqual(["direct", "moved"]);
   expect(ids("/src/acme/widgets/")).toEqual(["direct"]);
   expect(ids("widgets-old")).toEqual(["similar"]);
+  // Most recently active first: "moved" ran until 00:00:01, "direct" only at 00:00:00.
+  expect(listSessions(db, { project: "acme/widgets", limit: 10 }).map((s) => s.id)).toEqual(["moved", "direct"]);
+});
+
+test("userText keeps what the user typed and drops what Claude Code wrote into user lines", () => {
+  expect(userText("fix the orders page")).toBe("fix the orders page");
+  expect(userText("<task-notification>\n<task-id>x</task-id>\n</task-notification>")).toBeNull();
+  expect(userText('<teammate-message teammate_id="lead">go on</teammate-message>')).toBeNull();
+  expect(userText("<local-command-stdout>done</local-command-stdout>")).toBeNull();
   expect(
-    listSessions(db, { project: "acme/widgets", limit: 10 })
-      .map((s) => s.id)
-      .sort(),
-  ).toEqual(["direct", "moved"]);
+    userText(
+      "<command-message>review</command-message>\n<command-name>/review</command-name>\n<command-args>123</command-args>",
+    ),
+  ).toBe("/review 123");
+  expect(userText("<command-name>/clear</command-name>\n<command-args></command-args>")).toBe("/clear");
+  expect(userText("<bash-input>git status</bash-input>")).toBe("! git status");
+  expect(userText("<div>pasted html</div>")).toBe("<div>pasted html</div>");
+});
+
+test("openDb rewrites the user messages stored before userText, keeping the index in step", () => {
+  dir = mkdtempSync(join(tmpdir(), "csa-"));
+  const path = join(dir, "a.sqlite");
+  const old = openDb(path);
+  old.run("INSERT INTO sessions (id, file_path, project_dir) VALUES ('s', 's.jsonl', 'p')");
+  const add = old.query("INSERT INTO messages (session, role, text) VALUES (1, 'user', ?)");
+  for (const t of ["<task-notification>done</task-notification>", "<bash-input>ls</bash-input>", "plain request"]) {
+    add.run(t);
+  }
+  old.run("PRAGMA user_version = 0");
+  old.close();
+
+  const db = openDb(path);
+  expect(
+    db
+      .query<{ text: string }, []>("SELECT text FROM messages ORDER BY id")
+      .all()
+      .map((r) => r.text),
+  ).toEqual(["! ls", "plain request"]);
+  expect(search(db, ["done"], { limit: 10 })).toEqual([]);
+  expect(search(db, ["! ls"], { limit: 10 })).toHaveLength(1);
+  db.close();
 });

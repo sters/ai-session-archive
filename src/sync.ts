@@ -24,6 +24,25 @@ type AgentMeta = { agentType?: unknown; description?: unknown };
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const text = (b: Block): string | null => (b?.type === "text" && str(b.text)?.trim() ? (b.text as string) : null);
 
+// What Claude Code itself writes into user lines: notifications, command output, and messages from other agents.
+const ENVELOPE =
+  /^<(task-notification|local-command-(stdout|stderr|caveat)|bash-(stdout|stderr)|fork-boilerplate|system-reminder|teammate-message)[\s>]/;
+const tag = (t: string, name: string) => t.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1]?.trim();
+
+// The text of a user line as the user typed it: a slash command becomes `/name args` and a shell command
+// `! command`, and what Claude Code wrote itself is dropped (null).
+export function userText(t: string): string | null {
+  const s = t.trimStart();
+  if (ENVELOPE.test(s)) return null;
+  const command = s.startsWith("<command-") ? tag(s, "command-name") : undefined;
+  if (command) return [command, tag(s, "command-args")].filter(Boolean).join(" ");
+  if (s.startsWith("<bash-input>")) {
+    const input = tag(s, "bash-input");
+    return input ? `! ${input}` : null;
+  }
+  return t;
+}
+
 // Tool results and thinking are left out: tool results are most of the bytes and drown
 // search hits, and thinking is usually redacted to an empty string.
 export function extract(rec: TranscriptRecord): Row[] {
@@ -33,12 +52,9 @@ export function extract(rec: TranscriptRecord): Row[] {
   const blocks = Array.isArray(content) ? (content as Block[]) : [];
   const rows: Row[] = [];
   if (rec.type === "user") {
-    if (typeof content === "string") {
-      if (content.trim()) rows.push({ ts, role: "user", tool: null, text: content });
-    }
-    for (const b of blocks) {
-      const t = text(b);
-      if (t) rows.push({ ts, role: "user", tool: null, text: t });
+    for (const t of typeof content === "string" ? [content.trim() ? content : null] : blocks.map(text)) {
+      const typed = t && userText(t);
+      if (typed) rows.push({ ts, role: "user", tool: null, text: typed });
     }
   } else if (rec.type === "assistant") {
     for (const b of blocks) {

@@ -342,6 +342,10 @@ export function writeStats(db: Database, sessions: CalendarSession[]) {
   })();
 }
 
+// The local date a period's last day falls on, for the period in the row aliased `k`.
+const PERIOD_LAST_DAY = `(CASE k.period WHEN 'day' THEN k.start WHEN 'week' THEN date(k.start, '+6 days')
+  ELSE date(k.start, '+1 month', '-1 day') END)`;
+
 export type SummaryFilter = { period?: Period; since?: string; terms: string[]; limit: number };
 
 type SummaryRow = Omit<Summary, "stats"> & {
@@ -364,8 +368,7 @@ export function listSummaries(db: Database, f: SummaryFilter): Summary[] {
     params.push(f.period);
   }
   if (f.since) {
-    where.push(`(CASE k.period WHEN 'day' THEN k.start WHEN 'week' THEN date(k.start, '+6 days')
-                 ELSE date(k.start, '+1 month', '-1 day') END) >= ?`);
+    where.push(`${PERIOD_LAST_DAY} >= ?`);
     params.push(f.since);
   }
   for (const t of f.terms) {
@@ -437,4 +440,72 @@ export function lock(path: string): { release: () => void } | { heldBy: number }
     if (holder === 0 || alive(holder)) return { heldBy: holder };
     rmSync(path, { force: true });
   }
+}
+
+// `lines` are the lines of a section that hold a term, each prefixed with its number in the whole summary;
+// the section spans lines `from` to `to` of it, both counted from 1.
+export type SummaryHit = { period: Period; start: string; lastDay: string; from: number; to: number; lines: string };
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The [from, to) line ranges of a summary's sections. A section runs from a level-2 heading to the next;
+// lines before the first heading, or a whole summary without one, make a section of their own. With
+// `project`, only the sections whose heading names it as whole path segments, as `--project` matches a cwd.
+export function sections(lines: string[], project?: string): [number, number][] {
+  const starts = [0, ...lines.flatMap((l, i) => (i > 0 && l.startsWith("## ") ? [i] : []))];
+  const ranges = starts.map((from, k): [number, number] => [from, starts[k + 1] ?? lines.length]);
+  const name = project?.replace(/^\/+|\/+$/g, "");
+  if (!name) return ranges;
+  const names = new RegExp(`(^|[^\\w.-])${escapeRegExp(name)}($|[^\\w.-])`);
+  return ranges.filter(([from]) => lines[from]!.startsWith("## ") && names.test(lines[from]!));
+}
+
+// The sections of stored summaries that contain every term (case-insensitively, like LIKE), newest period
+// first by its last day, limited to `project`'s sections as in `sections`. `since` keeps the periods that
+// end at or after it.
+export function searchSummaries(
+  db: Database,
+  terms: string[],
+  f: { project?: string; since?: string; limit: number },
+): SummaryHit[] {
+  const where = terms.map(() => "k.text LIKE ?");
+  const params = terms.map((t) => `%${t}%`);
+  if (f.since) {
+    where.push(`${PERIOD_LAST_DAY} >= ?`);
+    params.push(f.since);
+  }
+  const rows = db
+    .query<{ period: Period; start: string; lastDay: string; text: string }, string[]>(
+      `SELECT k.period, k.start, ${PERIOD_LAST_DAY} AS lastDay, k.text FROM summaries k
+       WHERE ${where.join(" AND ") || "1"} ORDER BY lastDay DESC, k.start DESC`,
+    )
+    .all(...params);
+  const lower = terms.map((t) => t.toLowerCase());
+  const hits: SummaryHit[] = [];
+  for (const r of rows) {
+    const lines = r.text.split("\n");
+    for (const [from, to] of sections(lines, f.project)) {
+      const section = lines.slice(from, to).map((l) => l.toLowerCase());
+      if (!lower.every((t) => section.some((l) => l.includes(t)))) continue;
+      const matching = section.flatMap((l, i) =>
+        lower.some((t) => l.includes(t)) ? [`${from + i + 1}: ${lines[from + i]}`] : [],
+      );
+      hits.push({
+        period: r.period,
+        start: r.start,
+        lastDay: r.lastDay,
+        from: from + 1,
+        to,
+        lines: matching.join("\n"),
+      });
+      if (hits.length >= f.limit) return hits;
+    }
+  }
+  return hits;
+}
+
+export function getSummary(db: Database, period: Period, start: string): string | undefined {
+  return db
+    .query<{ text: string }, [string, string]>("SELECT text FROM summaries WHERE period = ? AND start = ?")
+    .get(period, start)?.text;
 }
