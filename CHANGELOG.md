@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.1.6](https://github.com/sters/ai-session-archive/compare/v0.1.5...v0.1.6) - 2026-11-18
+
+- Serve the web pages as one single-page app by @sters in https://github.com/sters/ai-session-archive/pull/9
+
 ## [v0.1.5](https://github.com/sters/ai-session-archive/compare/v0.1.4...v0.1.5) - 2026-11-18
 
 - Store day, week and month summaries and figures for recalling past work by @sters in https://github.com/sters/ai-session-archive/pull/7
