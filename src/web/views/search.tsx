@@ -113,7 +113,7 @@ export const search: View = async (params, signal) => {
   const form = (
     <form action="/">
       <input name="q" placeholder="terms (all must match)" value={params.get("q") ?? ""} />
-      <input name="project" placeholder="project (cwd contains)" value={params.get("project") ?? ""} />
+      <input name="project" placeholder="project (e.g. acme/widgets)" value={params.get("project") ?? ""} />
       <input name="since" type="date" value={params.get("since") ?? ""} />
       <button>Search</button>
     </form>

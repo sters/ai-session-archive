@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import { Calendar } from "../src/calendar";
 import { openDb } from "../src/db";
 import { getSession, listSessions, local, search, snippet } from "../src/query";
-import { claudeGenerate, listSummaries, summarize, writeStats, type Period } from "../src/summary";
+import { claudeGenerate, listSummaries, lock, summarize, writeStats, type Period } from "../src/summary";
 import { sync } from "../src/sync";
 import { statsLine } from "../src/totals";
 import { serve } from "../src/web/server";
@@ -24,7 +24,8 @@ Commands:
                            running sync every minute
 
 Options:
-  --project <text>         Only sessions whose cwd contains <text>
+  --project <path>         Only sessions that ran in <path> or below it, matched as whole path
+                           segments of any cwd it was in (acme/widgets, /src/acme/widgets)
   --since <YYYY-MM-DD>     Only messages (search), sessions (sessions) or periods (summarize, summaries)
                            at or after this local date
   --period <day|week|month>  Only summaries of this period (summaries)
@@ -75,20 +76,34 @@ const filter = (defaultLimit: number) => ({
 // Shared by sync and the web server, which keep the parsed sessions between runs.
 const calendar = new Calendar(db, Number(values.gap ?? 30) * 60_000);
 const model = values.model ?? "haiku";
-const summarizeNow = () =>
-  summarize(db, claudeGenerate(model), {
-    model,
-    since: values.since,
-    jobs: Number(values.jobs ?? 4) || 4,
-    log: (l) => console.log(`summarized ${l}`),
-  });
+const lockPath = `${dbPath}.summarize.lock`;
+// Resolves to the number of summaries written, or undefined when another process is summarizing.
+const summarizeNow = async () => {
+  const held = lock(lockPath);
+  if ("heldBy" in held) {
+    console.log(`summarize is already running (pid ${held.heldBy}, ${lockPath}); skipped`);
+    return;
+  }
+  try {
+    return await summarize(db, claudeGenerate(model), {
+      model,
+      since: values.since,
+      jobs: Number(values.jobs ?? 4) || 4,
+      log: (l) => console.log(`summarized ${l}`),
+    });
+  } finally {
+    held.release();
+  }
+};
+
+const printWritten = (n: number | undefined) => n !== undefined && console.log(`wrote ${n} summaries`);
 
 switch (command) {
   case "sync": {
     const r = await sync(db, projectsDir);
     writeStats(db, calendar.sessions());
     console.log(`synced ${r.files} files, ${r.messages} messages`);
-    if (values.summarize) console.log(`wrote ${await summarizeNow()} summaries`);
+    if (values.summarize) printWritten(await summarizeNow());
     break;
   }
   case "search": {
@@ -129,7 +144,7 @@ switch (command) {
     break;
   }
   case "summarize": {
-    console.log(`wrote ${await summarizeNow()} summaries`);
+    printWritten(await summarizeNow());
     break;
   }
   case "summaries": {

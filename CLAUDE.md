@@ -37,7 +37,9 @@ bin/ai-session-archive.ts --help
   lines, PRs), falling back to `messages` for sessions archived before `records` existed. Parsed sessions are cached in
   memory and re-parsed when their `imported_bytes` change.
 - `src/summary.ts` — `summarize` and `summaries`. Writes day summaries from `messages`, and week and month summaries
-  from the day summaries, into `summaries` by running `claude -p` with tools and hooks off. A month is built from days,
+  from the day summaries, into `summaries` by running `claude -p` with hooks off. A day's sessions are written to a
+  temp directory (`index.md` and `sessions/<id>.md`) that the model reads with Read, Grep and Glob under `dontAsk`,
+  which confines them to that directory; weeks and months get their input on stdin and no tools. A month is built from days,
   not weeks, because a week can straddle two months and a summary cannot be cut at a date. Days are written in
   parallel up to `--jobs`, then weeks and months together. Only ended periods are
   summarized, and one is written again when the fingerprint of its input (`source`) changes. Day boundaries come from

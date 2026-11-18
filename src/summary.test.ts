@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { openDb } from "./db";
 import type { Block, CalendarSession } from "./calendar";
-import { listSummaries, summarize, writeStats, type Period } from "./summary";
+import { listSummaries, lock, summarize, writeStats, type Period } from "./summary";
 
 // Around noon UTC, so that the local date is the same whether it is read by JavaScript (UTC under
 // `bun test`) or by SQLite's 'localtime' (the system time zone) in any zone within ±11 hours.
@@ -24,7 +27,7 @@ function fixture() {
   return { db, session, message };
 }
 
-test("summarizes ended days from their messages, then weeks and months from the day summaries", async () => {
+test("summarizes ended days from their session files, then weeks and months from the day summaries", async () => {
   const { db, session, message } = fixture();
   const cli = session("s1", "cli");
   const sdk = session("s2", "sdk-cli");
@@ -35,9 +38,11 @@ test("summarizes ended days from their messages, then weeks and months from the 
   message(cli, at(5, 10), "today, not summarized yet");
 
   const calls: string[] = [];
-  const generate = async (system: string, input: string) => {
-    calls.push(input);
-    return system.includes("daily summaries") ? `rollup of ${input.length}` : `day: ${input.split("\n").at(-2)}`;
+  const generate = async (system: string, input: string, files?: Record<string, string>) => {
+    if (!files) return `rollup of ${input.length}`;
+    const material = Object.values(files).join("\n");
+    calls.push(material);
+    return `day: ${material}`;
   };
   const o = { model: "test", today: "2026-10-05", jobs: 2 };
 
@@ -45,7 +50,8 @@ test("summarizes ended days from their messages, then weeks and months from the 
   const all = listSummaries(db, { terms: [], limit: 10 });
   expect(all.map((s) => `${s.period} ${s.start}`)).toEqual(["day 2026-10-04", "day 2026-10-01", "week 2026-09-28"]);
   expect(all[0]!.text).toContain("add pagination to orders");
-  expect(calls.join()).not.toContain("automated run");
+  expect(all[0]!.text).toContain("[11:00 user] automated run");
+  expect(all[0]!.text).toMatch(/## s2\nsdk-cli .*\ndirectories: \/work\/my-app\n/);
   expect(calls.join()).not.toContain("today");
 
   // Nothing changed, so nothing is written again.
@@ -79,7 +85,7 @@ test("writes up to `jobs` summaries at once, and stops starting new ones after a
     peak = Math.max(peak, running);
     await Bun.sleep(5);
     running--;
-    if (input.includes("day 2")) throw new Error("rate limited");
+    if (input.includes("2026-10-02")) throw new Error("rate limited");
     return "ok";
   };
   await expect(summarize(db, generate, { model: "test", today: "2026-10-31", jobs: 2 })).rejects.toThrow(
@@ -135,4 +141,23 @@ test("stores calendar totals per day, week and month, splitting active time at m
     start: "2026-10-05",
     text: null,
   });
+});
+
+test("lock lets one process in at a time and takes over a lock whose process is gone", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "csa-")), "lock");
+  const first = lock(path);
+  expect(first).toHaveProperty("release");
+  expect(lock(path)).toEqual({ heldBy: process.pid });
+  (first as { release: () => void }).release();
+  expect(existsSync(path)).toBe(false);
+
+  const gone = Bun.spawnSync(["true"]).pid;
+  writeFileSync(path, String(gone));
+  const taken = lock(path);
+  expect(taken).toHaveProperty("release");
+  expect(readFileSync(path, "utf8")).toBe(String(process.pid));
+
+  writeFileSync(path, "");
+  expect(lock(path)).toEqual({ heldBy: 0 });
+  rmSync(dirname(path), { recursive: true });
 });

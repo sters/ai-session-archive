@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "./db";
-import { getSession, search } from "./query";
+import { getSession, listSessions, search } from "./query";
 import { IMPORT_VERSION, strip, sync } from "./sync";
 
 let dir: string;
@@ -153,4 +153,40 @@ test("strip cuts a created file down to its newlines", () => {
     type: "user",
     toolUseResult: { type: "create", filePath: "/a", content: "\n\n", structuredPatch: [] },
   });
+});
+
+test("--project matches whole path segments of any cwd a session was in", async () => {
+  dir = mkdtempSync(join(tmpdir(), "csa-"));
+  mkdirSync(join(dir, "-ws"));
+  const session = (id: string, cwds: string[]) =>
+    writeFileSync(
+      join(dir, "-ws", `${id}.jsonl`),
+      cwds
+        .map((cwd, i) =>
+          line({
+            sessionId: id,
+            cwd,
+            type: "user",
+            timestamp: `2026-10-01T00:00:0${i}Z`,
+            message: { content: "deploy" },
+          }),
+        )
+        .join(""),
+    );
+  session("moved", ["/ws", "/ws/task-1/acme/widgets/api"]);
+  session("direct", ["/src/acme/widgets"]);
+  session("similar", ["/src/acme/widgets-old"]);
+  session("elsewhere", ["/ws"]);
+  const db = openDb(":memory:");
+  await sync(db, dir);
+
+  const ids = (project: string) => [...new Set(search(db, ["deploy"], { project, limit: 10 }).map((h) => h.id))].sort();
+  expect(ids("acme/widgets")).toEqual(["direct", "moved"]);
+  expect(ids("/src/acme/widgets/")).toEqual(["direct"]);
+  expect(ids("widgets-old")).toEqual(["similar"]);
+  expect(
+    listSessions(db, { project: "acme/widgets", limit: 10 })
+      .map((s) => s.id)
+      .sort(),
+  ).toEqual(["direct", "moved"]);
 });

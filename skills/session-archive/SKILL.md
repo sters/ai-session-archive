@@ -1,6 +1,6 @@
 ---
 name: session-archive
-description: Search past Claude Code sessions — what the user asked, what was answered, and which commands were run — through a local full-text index. Use when the user refers to earlier work ("前にやった", "あのとき", "先週の調査", "前のセッション"), asks what was done over a period, or when a past attempt at the same problem would save re-deriving it. Also use when the user wants the archive or its summaries kept up to date automatically.
+description: Search past Claude Code sessions — what the user asked, what was answered, and which commands were run — through a local full-text index, scoped to the current project by default. Use when the user refers to earlier work ("前にやった", "あのとき", "先週の調査", "前のセッション"), asks what was done over a period, or wants the archive kept up to date. Also use unprompted as the project's long-term memory, when resuming or starting non-trivial work in a project that has history, or on hitting an error, design question or identifier that has likely come up before.
 ---
 
 # session-archive
@@ -8,23 +8,44 @@ description: Search past Claude Code sessions — what the user asked, what was 
 Past sessions are indexed in a local SQLite database by `ai-session-archive`. Run it as
 `bunx github:sters/ai-session-archive <command>`.
 
+## Scope: the current project first
+
+Search the project you are working in first, and widen only when that finds nothing or the
+user points at other work. `--project <path>` keeps the sessions that were in `<path>` or
+below it at any point, matched as whole path segments, so `acme/widgets` matches
+`/src/acme/widgets/api` but not `/src/acme/widgets-old`.
+
+The same repository is often checked out in several places (clones, worktrees, task
+directories), so pass the part of the path they share, `<owner>/<repo>`, not `$PWD`. Take it
+from `git remote get-url origin` (the last two segments, without `.git`); outside a
+repository, or without a remote, pass the directory's name. Drop `--project` to search every
+project.
+
+## Steps
+
 1. Run `sync` first, so the current and recently ended sessions are included. It reads only
    what was appended since the last run and recalculates the period figures, so it takes a
    few seconds at most.
-2. Find candidates with `search <term...>`. Every term must appear in one message; hits are
-   newest first. Prefer distinctive terms: identifiers, ticket keys, error strings, table
-   names. Narrow with `--project <text>` (matches the session's cwd), `--since YYYY-MM-DD`
-   and `--limit <n>`. Terms of one or two characters work but scan the whole table.
+2. Find candidates with `search <term...> --project <owner>/<repo>`. Every term must appear in one
+   message; hits are newest first. Prefer distinctive terms: identifiers, ticket keys, error
+   strings, table names. Narrow further with `--since YYYY-MM-DD` and `--limit <n>`. Terms of
+   one or two characters work but scan the whole table.
 3. Read a hit in context with `show <session-id>`. Subagent sessions have ids starting with
    `agent-` and are listed at the end of their parent's `show`.
-4. For "what did I do in a period", or to recall the background of ongoing work, read the
-   stored summaries first: `summaries --period week --since YYYY-MM-DD` (also `day` and
-   `month`). Each entry starts with the period's figures (sessions, prompts, active hours, cost,
-   PRs, changed lines), which are calculated and also exist for the current period.
-   `summaries <term...>` finds the summaries mentioning every term, which is the
-   quickest way to see when and in which project something came up. A summary names the
-   session ids that hold the details; `show` them for the full exchange.
-5. Summaries exist only for days, weeks and months that have ended and have been summarized.
+4. To recall the background of ongoing work in this project, list its sessions with
+   `sessions --project <owner>/<repo>` and read the summaries that mention it with
+   `summaries <owner>/<repo>`. Summaries cover every project of a period, so `--project`
+   does not apply to them; each is grouped under a heading per project, named
+   `<owner>/<repo>` or, for a directory outside a repository, by the directory. Read only that
+   project's part of each hit. Summaries written by an older version may name the project by
+   its full path or only its directory name, so search by the repository name alone when
+   `<owner>/<repo>` finds too little. A summary names the session ids that hold the details;
+   `show` them for the full exchange.
+5. For "what did I do in a period", read `summaries --period week --since YYYY-MM-DD` (also
+   `day` and `month`). Each entry starts with the period's figures (sessions, prompts, active
+   hours, cost, PRs, changed lines), which are calculated over every project and also exist
+   for the current period.
+6. Summaries exist only for days, weeks and months that have ended and have been summarized.
    For today, or a period with no summary, list sessions with `sessions --since YYYY-MM-DD`
    and `show` the ones whose titles matter. Do not run `summarize` yourself unless the user
    asks: it calls `claude -p` once per period and takes a while.
