@@ -2,9 +2,12 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { Calendar } from "../src/calendar";
 import { openDb } from "../src/db";
 import { getSession, listSessions, local, search, snippet } from "../src/query";
+import { claudeGenerate, listSummaries, summarize, writeStats, type Period } from "../src/summary";
 import { sync } from "../src/sync";
+import { statsLine } from "../src/totals";
 import { serve } from "../src/web/server";
 
 const USAGE = `Usage: ai-session-archive <command> [options]
@@ -14,13 +17,21 @@ Commands:
   search <term...>         Messages containing every term, newest first
   sessions                 Main sessions, newest first
   show <session-id>        Every message of a session, with its subagents listed
+  summarize                Write the summary of every ended day, week and month that has none or whose
+                           input changed, by running \`claude -p\`
+  summaries [term...]      Stored summaries containing every term, newest first
   web                      Serve search, session and calendar pages on http://localhost:<port>,
                            running sync every minute
 
 Options:
   --project <text>         Only sessions whose cwd contains <text>
-  --since <YYYY-MM-DD>     Only messages (search) or sessions (sessions) at or after this local date
-  --limit <n>              Maximum rows (default: search 30, sessions 50)
+  --since <YYYY-MM-DD>     Only messages (search), sessions (sessions) or periods (summarize, summaries)
+                           at or after this local date
+  --period <day|week|month>  Only summaries of this period (summaries)
+  --model <model>          Model for summarize (default: haiku)
+  --jobs <n>               Summaries written at once by summarize (default: 4)
+  --summarize              Also run summarize after each sync (sync, web)
+  --limit <n>              Maximum rows (default: search 30, sessions 50, summaries 10)
   --port <n>               Port for web (default: 7357)
   --gap <minutes>          Idle time that splits a session into calendar events (default: 30)
 
@@ -36,6 +47,10 @@ const { values, positionals } = parseArgs({
     limit: { type: "string" },
     port: { type: "string" },
     gap: { type: "string" },
+    period: { type: "string" },
+    model: { type: "string" },
+    summarize: { type: "boolean" },
+    jobs: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -57,10 +72,23 @@ const filter = (defaultLimit: number) => ({
   limit: values.limit ? Number(values.limit) : defaultLimit,
 });
 
+// Shared by sync and the web server, which keep the parsed sessions between runs.
+const calendar = new Calendar(db, Number(values.gap ?? 30) * 60_000);
+const model = values.model ?? "haiku";
+const summarizeNow = () =>
+  summarize(db, claudeGenerate(model), {
+    model,
+    since: values.since,
+    jobs: Number(values.jobs ?? 4) || 4,
+    log: (l) => console.log(`summarized ${l}`),
+  });
+
 switch (command) {
   case "sync": {
     const r = await sync(db, projectsDir);
+    writeStats(db, calendar.sessions());
     console.log(`synced ${r.files} files, ${r.messages} messages`);
+    if (values.summarize) console.log(`wrote ${await summarizeNow()} summaries`);
     break;
   }
   case "search": {
@@ -100,8 +128,31 @@ switch (command) {
     }
     break;
   }
+  case "summarize": {
+    console.log(`wrote ${await summarizeNow()} summaries`);
+    break;
+  }
+  case "summaries": {
+    const period = values.period;
+    if (period !== undefined && !["day", "week", "month"].includes(period)) {
+      console.error("--period must be day, week or month");
+      process.exit(1);
+    }
+    const found = listSummaries(db, {
+      period: period as Period | undefined,
+      since: values.since,
+      terms: args,
+      limit: values.limit ? Number(values.limit) : 10,
+    });
+    for (const s of found) {
+      console.log(`# ${s.period} ${s.start}`);
+      if (s.stats) console.log(statsLine(s.stats));
+      console.log(`\n${s.text ?? "(not summarized yet)"}\n`);
+    }
+    break;
+  }
   case "web": {
-    const server = serve(db, Number(values.port ?? 7357), Number(values.gap ?? 30) * 60_000);
+    const server = serve(db, Number(values.port ?? 7357), calendar);
     console.log(`listening on ${server.url}`);
     let syncing = false;
     const syncNow = async () => {
@@ -109,10 +160,25 @@ switch (command) {
       syncing = true;
       try {
         await sync(db, projectsDir);
+        writeStats(db, calendar.sessions());
       } catch (err) {
         console.error("sync failed:", err);
       } finally {
         syncing = false;
+      }
+      if (values.summarize) void summarizeInBackground();
+    };
+    // Kept apart from `syncing`, so that a long first run of summarize does not hold back sync.
+    let summarizing = false;
+    const summarizeInBackground = async () => {
+      if (summarizing) return;
+      summarizing = true;
+      try {
+        await summarizeNow();
+      } catch (err) {
+        console.error("summarize failed:", err);
+      } finally {
+        summarizing = false;
       }
     };
     void syncNow();

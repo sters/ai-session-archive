@@ -18,6 +18,8 @@ bunx github:sters/ai-session-archive sync        # import new lines (incremental
 bunx github:sters/ai-session-archive search 注文履歴 OrderItems --since 2026-10-01
 bunx github:sters/ai-session-archive sessions --project my-app
 bunx github:sters/ai-session-archive show <session-id>
+bunx github:sters/ai-session-archive summarize   # write day, week and month summaries with `claude -p`
+bunx github:sters/ai-session-archive summaries --period week --since 2026-10-01
 bunx github:sters/ai-session-archive web         # search and read sessions at http://localhost:7357
 ```
 
@@ -26,13 +28,17 @@ bunx github:sters/ai-session-archive web         # search and read sessions at h
 `search` returns messages containing every term, newest first. Terms of one or two characters still match, but are
 not served by the trigram index and scan the whole table.
 
-| Option                 | Meaning                                                                       |
-| ---------------------- | ----------------------------------------------------------------------------- |
-| `--project <text>`     | Only sessions whose cwd contains `<text>`                                     |
-| `--since <YYYY-MM-DD>` | Only messages (`search`) or sessions (`sessions`) at or after this local date |
-| `--limit <n>`          | Maximum rows (default: `search` 30, `sessions` 50)                            |
-| `--port <n>`           | Port for `web` (default: 7357). It listens on 127.0.0.1 only                  |
-| `--gap <minutes>`      | Idle time that splits a session into calendar events (default: 30)            |
+| Option                        | Meaning                                                                                                           |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--project <text>`            | Only sessions whose cwd contains `<text>`                                                                         |
+| `--since <YYYY-MM-DD>`        | Only messages (`search`), sessions (`sessions`) or periods (`summarize`, `summaries`) at or after this local date |
+| `--limit <n>`                 | Maximum rows (default: `search` 30, `sessions` 50, `summaries` 10)                                                |
+| `--period <day\|week\|month>` | Only summaries of this period (`summaries`)                                                                       |
+| `--model <model>`             | Model for `summarize` (default: `haiku`)                                                                          |
+| `--jobs <n>`                  | Summaries written at once by `summarize` (default: 4)                                                             |
+| `--summarize`                 | Also run `summarize` after each `sync` (`sync`, `web`)                                                            |
+| `--port <n>`                  | Port for `web` (default: 7357). It listens on 127.0.0.1 only                                                      |
+| `--gap <minutes>`             | Idle time that splits a session into calendar events (default: 30)                                                |
 
 | Environment             | Default                                                 |
 | ----------------------- | ------------------------------------------------------- |
@@ -70,6 +76,41 @@ shown on the calendar with estimated times and no cost.
 Claude Code deletes transcripts older than `cleanupPeriodDays` (default 30). The index keeps what it already imported,
 but only sessions synced before their transcript was deleted. Raise `cleanupPeriodDays` if you want the originals kept.
 
+## Summaries
+
+`summarize` keeps a summary of each local day, week (Monday to Sunday) and month in the database, so that Claude can
+recall past work through the skill without reading whole transcripts.
+
+- A day is summarized from its messages, grouped by project: what was worked on and how it ended, decisions and their
+  reasons, problems and their fixes, what was left open, identifiers worth searching for, and the session ids holding
+  the details. Weeks and months are summarized from their day summaries.
+- Only periods that have ended are summarized. A period is summarized again when its input changes, for example when
+  a session from that day is synced late; otherwise a run that finds nothing new makes no calls.
+- Summaries are written by `claude -p` with tools, hooks and MCP servers disabled and without saving the session, so
+  it uses your Claude Code login and the runs do not appear in the archive. A day takes about half a minute. On the
+  first run, limit the range with `--since` unless you want the whole history summarized.
+- Up to `--jobs` summaries are written at once: days first, then weeks and months, which are built from the days. If
+  one fails, no further summary is started, and the next run picks up from what was written.
+- Subagents and sessions started through the SDK (`entrypoint` `sdk-cli`) are left out: their prompts are written by a program, and the session
+  that started them already records why.
+- Next to each summary, `sync` stores the period's calendar figures in `period_stats`: sessions, prompts, active time,
+  cost, PRs and changed lines, counted as in the calendar's "This period" panel. They are calculated, not written by
+  the model, so they are kept for the current day, week and month too, and include sessions started through the SDK.
+  Every `sync` recalculates them all, which takes a second or two.
+- `http://localhost:7357/summaries` shows them, filtered by period, terms and date like the `summaries` command. Session
+  ids written out in full link to the session's messages.
+- `summaries <term...>` prints the stored summaries containing every term, newest first. `--since` keeps the periods
+  that end on or after the date, so the week or month containing it is included.
+
+To keep them current, pass `--summarize` to `sync` or `web`, and `summarize` runs after each sync. `web` runs it apart
+from the minute-by-minute sync, so a long first run does not hold sync back; after that it makes calls only once a
+day has ended. In the `SessionEnd` hook below, run it in the background, because writing a summary takes longer than
+a hook is given:
+
+```json
+"command": "bunx github:sters/ai-session-archive sync --summarize >/dev/null 2>&1 &"
+```
+
 ## Calendar
 
 `http://localhost:7357/calendar` lays out the time spent working as a calendar.
@@ -80,8 +121,8 @@ but only sessions synced before their transcript was deleted. Raise `cleanupPeri
   other within 5 minutes are merged into one.
 - An event's title is the `ai-title`, otherwise the first prompt, otherwise `last-prompt`. Its colour is determined by
   the session's `cwd`.
-- Sessions whose `entrypoint` is `sdk-cli` (started programmatically through the SDK) are hidden by default. Toggle
-  them with "Show SDK runs".
+- Sessions whose `entrypoint` is `sdk-cli` (started programmatically through the SDK) are shown by default. Hide them
+  with "Show SDK runs".
 - Clicking an event shows the `claude --resume` command for that session and a link to its messages.
 
 | Item                                     | Source                                                                                                                                                                                                                                              |
