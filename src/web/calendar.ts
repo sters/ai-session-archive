@@ -327,13 +327,11 @@ function showDetail(ev: FcEvent) {
   const row = (k: string, v: Child) => [h("dt", { text: k }), h("dd", {}, v)];
   const cmd = `${s.cwd ? `cd ${shellQuote(s.cwd)} && ` : ""}claude --resume ${s.id}`;
   const copy = h("button", { type: "button", text: "Copy" });
-  copy.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(cmd);
-      copy.textContent = "Copied";
-    } catch {
-      copy.textContent = "Failed";
-    }
+  copy.addEventListener("click", () => {
+    navigator.clipboard.writeText(cmd).then(
+      () => (copy.textContent = "Copied"),
+      () => (copy.textContent = "Failed"),
+    );
   });
 
   const blockRows = [
