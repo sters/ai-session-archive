@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ai-session-archive summaries</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          14px/1.6 system-ui,
+          sans-serif;
+      }
+      body {
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+      form {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      input[name="q"] {
+        flex: 1 1 16rem;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        padding: 0.3rem 0.5rem;
+      }
+      .meta {
+        color: GrayText;
+        font-size: 12px;
+        font-weight: normal;
+      }
+      article {
+        border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+        padding: 0.5rem 0 1rem;
+      }
+      article summary {
+        cursor: pointer;
+        font-size: 1.15rem;
+        font-weight: 600;
+        padding: 0.25rem 0;
+      }
+      .stats {
+        font-size: 13px;
+        font-weight: normal;
+        font-variant-numeric: tabular-nums;
+        margin: 0.25rem 0 0.5rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+        background: color-mix(in srgb, CanvasText 6%, transparent);
+      }
+      .period {
+        font-size: 11px;
+        padding: 0 0.45rem;
+        margin-right: 0.5rem;
+        border-radius: 0.6rem;
+        border: 1px solid currentColor;
+        vertical-align: 2px;
+      }
+      .day {
+        color: #4a8;
+      }
+      .week {
+        color: #48c;
+      }
+      .month {
+        color: #a7f;
+      }
+      .body h3 {
+        font-size: 1.05rem;
+        margin: 1.2rem 0 0.4rem;
+      }
+      .body h4,
+      .body h5,
+      .body h6 {
+        font-size: 1rem;
+        margin: 1rem 0 0.3rem;
+      }
+      .body p,
+      .body ul,
+      .body ol {
+        margin: 0.4rem 0;
+      }
+      .body ul,
+      .body ol {
+        padding-left: 1.4rem;
+      }
+      .body code {
+        font-size: 12.5px;
+        padding: 0 0.2rem;
+        border-radius: 3px;
+        background: color-mix(in srgb, CanvasText 8%, transparent);
+        word-break: break-all;
+      }
+      .body pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        padding: 0.5rem;
+        background: color-mix(in srgb, CanvasText 6%, transparent);
+      }
+      .body pre code {
+        background: none;
+        padding: 0;
+      }
+      .table {
+        overflow-x: auto;
+      }
+      table {
+        border-collapse: collapse;
+        margin: 0.5rem 0;
+      }
+      th,
+      td {
+        border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+        padding: 0.2rem 0.5rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      mark {
+        background: #fd5;
+        color: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <form action="/summaries">
+      <select name="period">
+        <option value="">All periods</option>
+        <option value="day">Day</option>
+        <option value="week">Week</option>
+        <option value="month">Month</option>
+      </select>
+      <input name="q" placeholder="terms (all must match)" />
+      <input name="since" type="date" />
+      <button>Show</button>
+      <a href="/">Search</a>
+      <a href="/calendar">Calendar</a>
+    </form>
+    <main></main>
+    <script type="module" src="./summaries.tsx"></script>
+  </body>
+</html>

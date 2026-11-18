@@ -1,8 +1,10 @@
 import type { Database } from "bun:sqlite";
-import { Calendar, eventsBetween } from "../calendar";
+import { eventsBetween, type Calendar } from "../calendar";
 import { getSession, listSessions, search, snippet, type Filter } from "../query";
+import { listSummaries, type Period } from "../summary";
 import calendarPage from "./calendar.html";
 import index from "./index.html";
+import summariesPage from "./summaries.html";
 
 function filter(p: URLSearchParams, defaultLimit: number): Filter {
   const since = p.get("since");
@@ -28,8 +30,7 @@ function loopbackOnly<R extends Request>(handler: (req: R) => Response): (req: R
 const parseTime = (v: string | null) => (v ? Date.parse(/^\d{4}-\d\d-\d\d$/.test(v) ? `${v}T00:00:00` : v) : NaN);
 
 // Bound to loopback only: the database holds everything that passed through the sessions.
-export function serve(db: Database, port: number, gapMs: number) {
-  const calendar = new Calendar(db, gapMs);
+export function serve(db: Database, port: number, calendar: Calendar) {
   return Bun.serve({
     hostname: "127.0.0.1",
     port,
@@ -37,6 +38,7 @@ export function serve(db: Database, port: number, gapMs: number) {
     routes: {
       "/": index,
       "/calendar": calendarPage,
+      "/summaries": summariesPage,
       "/api/sessions": loopbackOnly((req) =>
         Response.json(listSessions(db, filter(new URL(req.url).searchParams, 100))),
       ),
@@ -45,6 +47,18 @@ export function serve(db: Database, port: number, gapMs: number) {
         const terms = (p.get("q") ?? "").split(/\s+/).filter(Boolean);
         if (terms.length === 0) return Response.json([]);
         return Response.json(search(db, terms, filter(p, 100)).map((h) => ({ ...h, text: snippet(h.text, terms) })));
+      }),
+      "/api/summaries": loopbackOnly((req) => {
+        const p = new URL(req.url).searchParams;
+        const period = p.get("period");
+        return Response.json(
+          listSummaries(db, {
+            period: ["day", "week", "month"].includes(period ?? "") ? (period as Period) : undefined,
+            since: p.get("since") || undefined,
+            terms: (p.get("q") ?? "").split(/\s+/).filter(Boolean),
+            limit: Number(p.get("limit")) || 60,
+          }),
+        );
       }),
       "/api/sessions/:id": loopbackOnly((req) => Response.json(getSession(db, req.params.id))),
       "/api/events": loopbackOnly((req) => {

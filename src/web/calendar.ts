@@ -1,5 +1,6 @@
 /// <reference lib="dom" />
-import type { CalendarEvent, Interval, ModelUsage, PR } from "../calendar";
+import type { CalendarEvent, ModelUsage, PR } from "../calendar";
+import { totals, type BlockOf } from "../totals";
 
 // The part of FullCalendar's global build that this page uses; it is loaded from jsDelivr.
 type FcEvent = {
@@ -34,7 +35,7 @@ function save(key: string, value: unknown) {
 }
 
 const hidden = new Set(load<string[]>(HIDDEN_KEY, []));
-let showSdk = load(SHOW_SDK_KEY, false);
+let showSdk = load(SHOW_SDK_KEY, true);
 let mode = load<"block" | "active">(MODE_KEY, "block");
 let lastEvents: CalendarEvent[] = [];
 let range = { start: new Date(), end: new Date() };
@@ -104,51 +105,17 @@ const timeFmt = new Intl.DateTimeFormat("en-US", {
 });
 const hmFmt = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
-// Active intervals of the events, clipped to [from, to).
-function activeWithin(events: CalendarEvent[], from: number, to: number): Interval[] {
-  const out: Interval[] = [];
-  for (const e of events) {
-    for (const iv of e.extendedProps.block.active) {
-      const start = Math.max(iv.start, from);
-      const end = Math.min(iv.end, to);
-      if (end > start) out.push({ start, end });
-    }
-  }
-  return out;
-}
-const sumMs = (ivs: Interval[]) => ivs.reduce((t, iv) => t + (iv.end - iv.start), 0);
-
-// Time is measured inside [from, to); cost, prompts, lines and PRs belong to the day their block starts.
-function sum(events: CalendarEvent[], from: number, to: number) {
-  const t = {
-    sessions: new Set<string>(),
-    activeMs: sumMs(activeWithin(events, from, to)),
-    costUSD: 0,
-    prompts: 0,
-    linesAdded: 0,
-    linesRemoved: 0,
-    prs: 0,
-  };
-  for (const e of events) {
-    const b = e.extendedProps.block;
-    t.sessions.add(e.extendedProps.session.id);
-    t.costUSD += b.costUSD;
-    t.prompts += b.prompts;
-    t.linesAdded += b.linesAdded;
-    t.linesRemoved += b.linesRemoved;
-    t.prs += b.prs.length;
-  }
-  return t;
-}
+const blocksOf = (events: CalendarEvent[]): BlockOf[] =>
+  events.map((e) => ({ session: e.extendedProps.session.id, block: e.extendedProps.block }));
 
 function renderTotals(events: CalendarEvent[]) {
-  const t = sum(events, range.start.getTime(), range.end.getTime());
+  const t = totals(blocksOf(events), range.start.getTime(), range.end.getTime());
   const cell = (k: string, v: Child, attrs?: Record<string, string>) =>
     h("div", attrs, h("div", { class: "k", text: k }), v);
   byId("totals").replaceChildren(
     cell("Active", h("div", { class: "v num", text: hours(t.activeMs) }), { title: ACTIVE_HINT }),
     cell("Cost", h("div", { class: "v num", text: usd(t.costUSD) }), { title: "API-price equivalent" }),
-    cell("Sessions", h("div", { class: "v num", text: int(t.sessions.size) })),
+    cell("Sessions", h("div", { class: "v num", text: int(t.sessions) })),
     cell("Prompts", h("div", { class: "v num", text: int(t.prompts) })),
     cell("PRs", h("div", { class: "v num", text: int(t.prs) })),
     cell("Changed lines", [
@@ -212,19 +179,14 @@ function renderProjects() {
 }
 
 function dailySummaries(events: CalendarEvent[]): FcInput[] {
-  const byDay = new Map<string, CalendarEvent[]>();
-  for (const e of events) {
-    const k = dayKey(new Date(e.start));
-    byDay.set(k, [...(byDay.get(k) ?? []), e]);
-  }
-  return [...byDay.entries()].map(([day, evs]) => {
+  const days = new Set(events.map((e) => dayKey(new Date(e.start))));
+  return [...days].map((day) => {
     const from = new Date(`${day}T00:00:00`);
     const to = new Date(from);
     to.setDate(to.getDate() + 1);
-    const t = sum(evs, from.getTime(), to.getTime());
-    // Blocks that started the day before can still run into this day.
-    const active = sumMs(activeWithin(events, from.getTime(), to.getTime()));
-    const parts = [`Active ${hours(active)}`, usd(t.costUSD)];
+    // All events, not only this day's: blocks that started the day before can still run into it.
+    const t = totals(blocksOf(events), from.getTime(), to.getTime());
+    const parts = [`Active ${hours(t.activeMs)}`, usd(t.costUSD)];
     if (t.prs) parts.push(`PR ${t.prs}`);
     return {
       id: `summary-${day}`,
@@ -365,13 +327,11 @@ function showDetail(ev: FcEvent) {
   const row = (k: string, v: Child) => [h("dt", { text: k }), h("dd", {}, v)];
   const cmd = `${s.cwd ? `cd ${shellQuote(s.cwd)} && ` : ""}claude --resume ${s.id}`;
   const copy = h("button", { type: "button", text: "Copy" });
-  copy.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(cmd);
-      copy.textContent = "Copied";
-    } catch {
-      copy.textContent = "Failed";
-    }
+  copy.addEventListener("click", () => {
+    navigator.clipboard.writeText(cmd).then(
+      () => (copy.textContent = "Copied"),
+      () => (copy.textContent = "Failed"),
+    );
   });
 
   const blockRows = [

@@ -36,9 +36,21 @@ bin/ai-session-archive.ts --help
 - `src/calendar.ts` — splits sessions into calendar blocks from `records` (active turns, tokens, cost split, changed
   lines, PRs), falling back to `messages` for sessions archived before `records` existed. Parsed sessions are cached in
   memory and re-parsed when their `imported_bytes` change.
-- `src/web/` — `web` command, which also runs `sync` every minute. `server.ts` serves JSON from `query.ts` and
-  `calendar.ts`, and `index.html` and `calendar.html` as Bun HTML imports, which bundle `app.tsx` and `web/calendar.ts`
-  at runtime. Both build DOM nodes with their own `h()`, so there is no React. The one client library is FullCalendar
+- `src/summary.ts` — `summarize` and `summaries`. Writes day summaries from `messages`, and week and month summaries
+  from the day summaries, into `summaries` by running `claude -p` with tools and hooks off. A month is built from days,
+  not weeks, because a week can straddle two months and a summary cannot be cut at a date. Days are written in
+  parallel up to `--jobs`, then weeks and months together. Only ended periods are
+  summarized, and one is written again when the fingerprint of its input (`source`) changes. Day boundaries come from
+  SQLite's `date(ts, 'localtime')`, which follows the system time zone even under `bun test` (where JavaScript runs in
+  UTC), so test fixtures keep their times near noon UTC.
+- `src/totals.ts` — totals over calendar blocks for a time range (sessions, prompts, active time, cost, changed lines,
+  PRs). The calendar page and `writeStats` in `summary.ts`, which `sync` runs to rewrite `period_stats`, both use it,
+  so the stored figures match the page. It is bundled for the browser, so it imports types only.
+- `src/web/` — `web` command, which also runs `sync` every minute. `server.ts` serves JSON from `query.ts`,
+  `calendar.ts` and `summary.ts`, and `index.html`, `summaries.html` and `calendar.html` as Bun HTML imports, which
+  bundle `app.tsx`, `summaries.tsx` and `web/calendar.ts` at runtime. They build DOM nodes with `h()` (`h.tsx`, and
+  `web/calendar.ts`'s own), so there is no React. `summaries.tsx` renders summary Markdown to DOM nodes, never
+  `innerHTML`, since the text comes from transcripts. The one client library is FullCalendar
   on the calendar page, loaded from jsDelivr.
 - `skills/session-archive/SKILL.md` and `.claude-plugin/` — the plugin. tagpr bumps the version in both
   `package.json` and `.claude-plugin/plugin.json`.
@@ -56,3 +68,7 @@ bin/ai-session-archive.ts --help
   tarball URL and CI cannot reach it. After `bun install`, clear them:
   `sed -i '' -E 's#"https://registry\.[^"]*/-/[^"]*\.tgz"#""#' bun.lock`.
 - Runtime dependencies stay at zero; use Bun built-ins (`bun:sqlite`, `Bun.file`, `Bun.Glob`) and `node:` modules.
+- `summarize` runs the `claude` CLI rather than the Claude Agent SDK. The SDK runs that same binary underneath but
+  ships its own copy, a platform package of several hundred MB, which `bunx` would fetch for every command, `search`
+  included. A summary needs only one text reply, which `claude -p` gives on stdout. What the SDK would add is working
+  without `claude` on `PATH`; revisit it if that becomes a need.
