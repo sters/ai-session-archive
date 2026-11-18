@@ -34,8 +34,7 @@ Commands:
   summarize                Write the summary of every ended day, week and month that has none or whose
                            input changed, by running \`claude -p\`
   summaries [term...]      Stored summaries containing every term, newest first
-  web                      Serve search, session and calendar pages on http://localhost:<port>,
-                           running sync every minute
+  web                      Serve search, session and calendar pages on http://localhost:<port>
 
 Options:
   --project <path>         Only sessions that ran in <path> or below it, matched as whole path
@@ -45,7 +44,7 @@ Options:
   --period <day|week|month>  Only summaries of this period (summaries)
   --model <model>          Model for summarize (default: haiku)
   --jobs <n>               Summaries written at once by summarize (default: 4)
-  --summarize              Also run summarize after each sync (sync, web)
+  --summarize              Also run summarize after sync (sync)
   --limit <n>              Maximum rows (default: search 30, sessions 50, summaries 10)
   --port <n>               Port for web (default: 7357)
   --gap <minutes>          Idle time that splits a session into calendar events (default: 30)
@@ -102,7 +101,7 @@ const filter = (defaultLimit: number) => ({
   roles,
 });
 
-// Shared by sync and the web server, which keep the parsed sessions between runs.
+// The web server keeps the parsed sessions between requests.
 const calendar = new Calendar(db, Number(values.gap ?? 30) * 60_000);
 const model = values.model ?? "haiku";
 const lockPath = `${dbPath}.summarize.lock`;
@@ -285,35 +284,6 @@ switch (command) {
   case "web": {
     const server = serve(db, Number(values.port ?? 7357), calendar);
     console.log(`listening on ${server.url}`);
-    let syncing = false;
-    const syncNow = async () => {
-      if (syncing) return;
-      syncing = true;
-      try {
-        await sync(db, projectsDir);
-        writeStats(db, calendar.sessions());
-      } catch (err) {
-        console.error("sync failed:", err);
-      } finally {
-        syncing = false;
-      }
-      if (values.summarize) void summarizeInBackground();
-    };
-    // Kept apart from `syncing`, so that a long first run of summarize does not hold back sync.
-    let summarizing = false;
-    const summarizeInBackground = async () => {
-      if (summarizing) return;
-      summarizing = true;
-      try {
-        await summarizeNow();
-      } catch (err) {
-        console.error("summarize failed:", err);
-      } finally {
-        summarizing = false;
-      }
-    };
-    void syncNow();
-    setInterval(() => void syncNow(), 60_000);
     break;
   }
   default:
