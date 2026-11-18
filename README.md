@@ -30,7 +30,7 @@ not served by the trigram index and scan the whole table.
 
 | Option                        | Meaning                                                                                                           |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `--project <text>`            | Only sessions whose cwd contains `<text>`                                                                         |
+| `--project <path>`            | Only sessions that ran in `<path>` or below it at any point, matched as whole path segments (`acme/widgets`)      |
 | `--since <YYYY-MM-DD>`        | Only messages (`search`), sessions (`sessions`) or periods (`summarize`, `summaries`) at or after this local date |
 | `--limit <n>`                 | Maximum rows (default: `search` 30, `sessions` 50, `summaries` 10)                                                |
 | `--period <day\|week\|month>` | Only summaries of this period (`summaries`)                                                                       |
@@ -81,18 +81,25 @@ but only sessions synced before their transcript was deleted. Raise `cleanupPeri
 `summarize` keeps a summary of each local day, week (Monday to Sunday) and month in the database, so that Claude can
 recall past work through the skill without reading whole transcripts.
 
-- A day is summarized from its messages, grouped by project: what was worked on and how it ended, decisions and their
-  reasons, problems and their fixes, what was left open, identifiers worth searching for, and the session ids holding
-  the details. Weeks and months are summarized from their day summaries.
+- A day is summarized from its sessions, under one heading per project, named `<owner>/<repo>` when the session's
+  working directories show one: what was worked on and how it ended, decisions and their reasons, problems and their
+  fixes, what was left open, identifiers worth searching for, and the session ids holding the details. The day's
+  sessions are written to a temporary directory as an index and one file per session, and the model reads what it
+  needs from them. Weeks and months are summarized from their day summaries, grouped the same way.
 - Only periods that have ended are summarized. A period is summarized again when its input changes, for example when
   a session from that day is synced late; otherwise a run that finds nothing new makes no calls.
-- Summaries are written by `claude -p` with tools, hooks and MCP servers disabled and without saving the session, so
-  it uses your Claude Code login and the runs do not appear in the archive. A day takes about half a minute. On the
-  first run, limit the range with `--since` unless you want the whole history summarized.
+- Summaries are written by `claude -p` with hooks and MCP servers disabled and without saving the session, so it
+  uses your Claude Code login and the runs do not appear in the archive. A day's run has only Read, Grep and Glob, in
+  `dontAsk` permission mode, so it can read the files of that day and nothing outside their directory; weeks and
+  months run with no tools. A day takes a minute or two. On the first run, limit the range with `--since` unless you
+  want the whole history summarized.
 - Up to `--jobs` summaries are written at once: days first, then weeks and months, which are built from the days. If
   one fails, no further summary is started, and the next run picks up from what was written.
-- Subagents and sessions started through the SDK (`entrypoint` `sdk-cli`) are left out: their prompts are written by a program, and the session
-  that started them already records why.
+- One `summarize` runs at a time. While one holds `<database>.summarize.lock`, another run, such as a second
+  session ending at the same moment, skips summarizing and says so; `sync` itself still runs. A lock left by a
+  process that is gone is taken over.
+- Subagents are left out; the session that started one already records what it was asked and what it reported.
+  Sessions started through the SDK are included, since they often hold the work itself.
 - Next to each summary, `sync` stores the period's calendar figures in `period_stats`: sessions, prompts, active time,
   cost, PRs and changed lines, counted as in the calendar's "This period" panel. They are calculated, not written by
   the model, so they are kept for the current day, week and month too, and include sessions started through the SDK.

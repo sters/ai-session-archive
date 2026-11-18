@@ -4,6 +4,19 @@ const SNIPPET_RADIUS = 80;
 
 export type Filter = { project?: string; since?: string; limit: number };
 
+// Keeps the sessions that ran in `project` or below it at any point, not only where they started:
+// `project` matches whole path segments of a cwd, so `acme/widgets` matches /src/acme/widgets/api but
+// not /src/acme/widgets-old. A cwd is recorded on the lines where it changes (see `strip` in sync.ts).
+function inProject(alias: string, project: string): [string, string[]] {
+  const segment = `/${project.replace(/^\/+|\/+$/g, "")}/`;
+  return [
+    `(instr('/' || ${alias}.cwd || '/', ?) > 0 OR EXISTS (
+       SELECT 1 FROM records r WHERE r.session = ${alias}.rowid
+         AND instr('/' || json_extract(r.data, '$.cwd') || '/', ?) > 0))`,
+    [segment, segment],
+  ];
+}
+
 export type Hit = {
   ts: string | null;
   id: string;
@@ -19,8 +32,9 @@ export function search(db: Database, terms: string[], f: Filter): Hit[] {
   const where = terms.map(() => "messages_fts.text LIKE ?");
   const params: (string | number)[] = terms.map((t) => `%${t}%`);
   if (f.project) {
-    where.push("s.cwd LIKE ?");
-    params.push(`%${f.project}%`);
+    const [sql, p] = inProject("s", f.project);
+    where.push(sql);
+    params.push(...p);
   }
   if (f.since) {
     where.push("m.ts >= ?");
@@ -78,8 +92,9 @@ export function listSessions(db: Database, f: Filter): ListedSession[] {
   const where = ["parent_id IS NULL"];
   const params: (string | number)[] = [];
   if (f.project) {
-    where.push("cwd LIKE ?");
-    params.push(`%${f.project}%`);
+    const [sql, p] = inProject("sessions", f.project);
+    where.push(sql);
+    params.push(...p);
   }
   if (f.since) {
     where.push("last_ts >= ?");
