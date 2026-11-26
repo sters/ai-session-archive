@@ -10,16 +10,20 @@ type FcEvent = {
   extendedProps: CalendarEvent["extendedProps"] & { summary?: boolean; lines?: string[] };
 };
 type FcInput = Record<string, unknown>;
-type FcCalendar = { render(): void; refetchEvents(): void; destroy(): void };
+type FcView = { type: string; currentStart: Date; currentEnd: Date };
+type FcCalendar = { view: FcView; render(): void; refetchEvents(): void; updateSize(): void; destroy(): void };
 declare const FullCalendar: { Calendar: new (el: HTMLElement, options: Record<string, unknown>) => FcCalendar };
 
 const FULLCALENDAR_URL = "https://cdn.jsdelivr.net/npm/fullcalendar@6.1.21/index.global.min.js";
 const HIDDEN_KEY = "calendar.hiddenProjects";
 const SHOW_SDK_KEY = "calendar.showSdk";
 const MODE_KEY = "calendar.mode";
+const SHOW_TITLES_KEY = "calendar.showTitles";
+const SHOW_TIMES_KEY = "calendar.showTimes";
 const REFRESH_MS = 60_000;
 const MIN_EVENT_MS = 5 * 60_000;
 const FILES_SHOWN = 15;
+const LIST_CHUNK_DAYS = 7;
 const ACTIVE_HINT = "Total time Claude was running. Sessions running in parallel are each counted";
 const MAX_VALUE_PX = 18;
 const MIN_VALUE_PX = 10;
@@ -42,6 +46,8 @@ function save(key: string, value: unknown) {
 const hidden = new Set(load<string[]>(HIDDEN_KEY, []));
 let showSdk = load(SHOW_SDK_KEY, true);
 let mode = load<"block" | "active">(MODE_KEY, "block");
+let showTitles = load(SHOW_TITLES_KEY, true);
+let showTimes = load(SHOW_TIMES_KEY, true);
 
 let fullCalendar: Promise<void> | undefined;
 function loadFullCalendar() {
@@ -106,6 +112,7 @@ const timeFmt = new Intl.DateTimeFormat("en-US", {
   hourCycle: "h23",
 });
 const hmFmt = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const dayFmt = new Intl.DateTimeFormat("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
 const blocksOf = (events: CalendarEvent[]): BlockOf[] =>
   events.map((e) => ({ session: e.extendedProps.session.id, block: e.extendedProps.block }));
@@ -403,16 +410,166 @@ export const calendar: View = async (_params, signal) => {
     </section>
   );
   const host = <div class="fc-host" />;
+  const applyLabels = () => {
+    host.classList.toggle("hide-titles", !showTitles);
+    host.classList.toggle("hide-times", !showTimes);
+  };
+  applyLabels();
+  const labelToggle = (key: string, get: () => boolean, set: (v: boolean) => void, text: string) => (
+    <label class="toggle">
+      <input
+        type="checkbox"
+        checked={get()}
+        onChange={(ev) => {
+          set((ev.currentTarget as HTMLInputElement).checked);
+          save(key, get());
+          applyLabels();
+        }}
+      />{" "}
+      {text}
+    </label>
+  );
+  // The list view is drawn here rather than by FullCalendar, whose list covers one fixed range: it starts
+  // at today, loads LIST_CHUNK_DAYS older days whenever its end scrolls into view, and the totals cover the
+  // rows on screen.
+  type ListItem = CalendarEvent & { color: string };
+  let listOpen = false;
+  let listUntil = 0;
+  let earliest: number | null = null;
+  let loading = false;
+  const listEvents = new Map<string, CalendarEvent>();
+  const rowItems = new WeakMap<Element, ListItem>();
+  const shownRows = new Set<Element>();
+  const listBody = <div />;
+  const listEnd = <div class="list-end" />;
+  const listEl = (
+    <div class="event-list">
+      {listBody}
+      {listEnd}
+    </div>
+  );
+  const rowObserver = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) shownRows.add(e.target);
+        else shownRows.delete(e.target);
+      }
+      renderTotals();
+    },
+    { root: listEl },
+  );
+  const endObserver = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && void loadOlder(), {
+    root: listEl,
+    rootMargin: "400px",
+  });
+
+  async function fetchInto(start: number, end: number) {
+    const q = new URLSearchParams({ start: new Date(start).toISOString(), end: new Date(end).toISOString() });
+    for (const e of await getJSON<CalendarEvent[]>(`/api/events?${q}`, signal)) listEvents.set(e.id, e);
+  }
+
+  async function loadOlder() {
+    if (loading || earliest === null || listUntil <= earliest) return;
+    loading = true;
+    listEnd.textContent = "Loading…";
+    try {
+      const from = new Date(listUntil);
+      from.setDate(from.getDate() - LIST_CHUNK_DAYS);
+      await fetchInto(from.getTime(), listUntil);
+      listUntil = from.getTime();
+      renderList();
+    } finally {
+      loading = false;
+    }
+    // Keep loading while the end is still in view.
+    endObserver.unobserve(listEnd);
+    endObserver.observe(listEnd);
+  }
+
+  function renderList() {
+    if (!listUntil) return;
+    const shown = [...listEvents.values()].filter(keep);
+    const items = (toCalendarEvents(shown) as ListItem[]).sort((a, b) => b.start - a.start);
+    const daySummary = new Map(
+      dailySummaries(shown).map((d) => [d.start, (d.extendedProps as FcEvent["extendedProps"]).lines]),
+    );
+    const days = Map.groupBy(items, (it) => dayKey(new Date(it.start)));
+    rowObserver.disconnect();
+    shownRows.clear();
+    listBody.replaceChildren(
+      ...[...days].flatMap(([day, dayItems]) => [
+        <div class="list-day">
+          <span>{dayFmt.format(new Date(`${day}T00:00:00`))}</span>
+          <span class="muted">{(daySummary.get(day) ?? []).join(" · ")}</span>
+        </div>,
+        ...dayItems.map((it) => {
+          const row = (
+            <div
+              class="list-row"
+              onClick={() => {
+                detailBody.replaceChildren(h("div", null, detailOf(it)));
+                detail.hidden = false;
+              }}
+            >
+              <span class="time num">{`${hmFmt.format(new Date(it.start))} – ${hmFmt.format(new Date(it.end))}`}</span>
+              <span class="swatch" style={`background: ${it.color}`} />
+              <span class="title">{it.title || "(untitled)"}</span>
+            </div>
+          );
+          rowItems.set(row, it);
+          rowObserver.observe(row);
+          return row;
+        }),
+      ]),
+    );
+    listEnd.textContent = earliest === null || listUntil <= earliest ? "No older sessions" : "";
+    renderTotals();
+  }
+
+  async function openList() {
+    listOpen = true;
+    calendarPane.classList.add("list-mode");
+    periodTitle.textContent = "On screen";
+    if (!listUntil) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      today.setDate(today.getDate() + 1);
+      listUntil = today.getTime();
+      earliest = (await getJSON<{ start: number | null }>("/api/events/earliest", signal)).start;
+      endObserver.observe(listEnd);
+    }
+    renderTotals();
+  }
+
+  function closeList() {
+    if (!listOpen) return;
+    listOpen = false;
+    calendarPane.classList.remove("list-mode");
+    periodTitle.textContent = "This period";
+    fc.updateSize();
+    renderTotals();
+  }
+
+  async function refreshList() {
+    if (!listUntil) return;
+    const now = Date.now();
+    await fetchInto(now - 86_400_000, now + 86_400_000);
+    renderList();
+  }
+
+  const periodTitle = <h2>This period</h2>;
+
   // A click anywhere on the calendar closes the pane; a click on another session's event is handled by
   // eventClick, which switches the pane instead.
   const calendarPane = (
     <div
       class="calendar-main"
       onClick={(ev) => {
-        if (!(ev.target as Element).closest(".fc-event:not(.summary-event)")) closeDetail();
+        if (!(ev.target as Element).closest(".fc-event:not(.summary-event), .list-row")) closeDetail();
       }}
     >
       {host}
+      {listEl}
     </div>
   );
 
@@ -433,7 +590,8 @@ export const calendar: View = async (_params, signal) => {
   );
   const modeButtons = [modeButton("block", "Blocks"), modeButton("active", "Active spans")];
 
-  const visible = () => lastEvents.filter((e) => (showSdk || !isSdk(e)) && !hidden.has(e.extendedProps.session.cwd));
+  const keep = (e: CalendarEvent) => (showSdk || !isSdk(e)) && !hidden.has(e.extendedProps.session.cwd);
+  const visible = () => lastEvents.filter(keep);
 
   function renderProjects() {
     const counts = new Map<string, number>();
@@ -465,13 +623,31 @@ export const calendar: View = async (_params, signal) => {
     sdkCount.textContent = String(lastEvents.filter(isSdk).length);
   }
 
+  function renderTotals() {
+    if (listOpen) {
+      const items = [...shownRows].map((r) => rowItems.get(r)!);
+      const from = Math.min(...items.map((it) => it.start));
+      const to = Math.max(...items.map((it) => it.end));
+      // In "Active spans" mode one block has a row per span; count the block once.
+      const events = [...new Map(items.map((it) => [it.id.split("~")[0], it])).values()];
+      totalsEl.replaceChildren(...totalCards(events, { start: new Date(from), end: new Date(to) }));
+    } else {
+      const { currentStart: start, currentEnd: end } = fc.view;
+      totalsEl.replaceChildren(...totalCards(visible(), { start, end }));
+    }
+    fitValues(totalsEl);
+  }
+
   type FetchInfo = { start: Date; end: Date; startStr: string; endStr: string };
   const fc = new FullCalendar.Calendar(host, {
     initialView: "timeGridWeek",
     headerToolbar: {
       left: "prev,next today",
       center: "title",
-      right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+      right: "list,timeGridDay,timeGridWeek,dayGridMonth",
+    },
+    customButtons: {
+      list: { text: "list", click: () => void openList() },
     },
     height: "100%",
     firstDay: 1,
@@ -482,6 +658,8 @@ export const calendar: View = async (_params, signal) => {
     slotEventOverlap: false,
     dayMaxEvents: 6,
     eventOrder: "order,start,-duration",
+    // Switching views or dates within the fetched range does not refetch, so the totals follow the view here.
+    datesSet: () => renderTotals(),
     eventTimeFormat: { hour: "2-digit", minute: "2-digit", hour12: false },
     slotLabelFormat: { hour: "2-digit", minute: "2-digit", hour12: false },
     events: async (info: FetchInfo, success: (events: FcInput[]) => void, failure: (err: unknown) => void) => {
@@ -490,8 +668,8 @@ export const calendar: View = async (_params, signal) => {
         lastEvents = await getJSON<CalendarEvent[]>(`/api/events?${q}`, signal);
         const shown = visible();
         renderProjects();
-        totalsEl.replaceChildren(...totalCards(shown, info));
-        fitValues(totalsEl);
+        renderTotals();
+        renderList();
         success([...dailySummaries(shown), ...toCalendarEvents(shown)]);
       } catch (err) {
         failure(err);
@@ -542,7 +720,19 @@ export const calendar: View = async (_params, signal) => {
             />{" "}
             Show SDK runs {sdkCount}
           </label>
-          <h2>This period</h2>
+          {labelToggle(
+            SHOW_TITLES_KEY,
+            () => showTitles,
+            (v) => (showTitles = v),
+            "Show titles",
+          )}
+          {labelToggle(
+            SHOW_TIMES_KEY,
+            () => showTimes,
+            (v) => (showTimes = v),
+            "Show times",
+          )}
+          {periodTitle}
           {totalsEl}
           <h2>Projects</h2>
           {projectsEl}
@@ -553,11 +743,24 @@ export const calendar: View = async (_params, signal) => {
     ),
     mounted: () => {
       fc.render();
-      const timer = setInterval(() => fc.refetchEvents(), REFRESH_MS);
+      const timer = setInterval(() => {
+        fc.refetchEvents();
+        void refreshList();
+      }, REFRESH_MS);
+      // Picking a calendar view leaves the list, even when FullCalendar is already on that view.
+      host.addEventListener(
+        "click",
+        (ev) =>
+          (ev.target as Element).closest(".fc-timeGridDay-button, .fc-timeGridWeek-button, .fc-dayGridMonth-button") &&
+          closeList(),
+        { signal },
+      );
       window.addEventListener("resize", () => fitValues(totalsEl), { signal });
       document.addEventListener("keydown", (ev) => ev.key === "Escape" && closeDetail(), { signal });
       signal.addEventListener("abort", () => {
         clearInterval(timer);
+        rowObserver.disconnect();
+        endObserver.disconnect();
         fc.destroy();
       });
     },

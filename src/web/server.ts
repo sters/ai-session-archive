@@ -67,6 +67,10 @@ export function serve(db: Database, port: number, calendar: Calendar) {
         if (Number.isNaN(start) || Number.isNaN(end)) return new Response("invalid start or end", { status: 400 });
         return Response.json(eventsBetween(calendar.sessions(), start, end));
       }),
+      "/api/events/earliest": loopbackOnly(() => {
+        const starts = calendar.sessions().flatMap((s) => s.blocks.slice(0, 1).map((b) => b.start));
+        return Response.json({ start: starts.length ? Math.min(...starts) : null });
+      }),
     },
     fetch: () => new Response("not found", { status: 404 }),
   });
