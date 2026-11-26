@@ -475,6 +475,85 @@
         padding: 1px 4px;
         white-space: normal;
       }
+      .hide-titles .fc-event:not(.summary-event) .fc-event-title,
+      .hide-times .fc-event:not(.summary-event) .fc-event-time {
+        display: none;
+      }
+      .calendar-main.list-mode {
+        display: flex;
+        flex-direction: column;
+      }
+      .list-mode .fc-host,
+      .list-mode .fc {
+        flex: none;
+        height: auto !important;
+      }
+      .list-mode .fc-view-harness {
+        display: none;
+      }
+      .list-mode .fc-header-toolbar .fc-toolbar-chunk:not(:last-child) {
+        visibility: hidden;
+      }
+      .list-mode .fc .fc-button-primary:not(:disabled).fc-button-active {
+        background: var(--fc-button-bg-color);
+        border-color: var(--fc-button-border-color);
+      }
+      .list-mode .fc .fc-button-primary.fc-list-button {
+        background: var(--fc-button-active-bg-color);
+        border-color: var(--fc-button-active-border-color);
+      }
+      .event-list {
+        display: none;
+      }
+      .list-mode .event-list {
+        display: block;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+      }
+      .list-day {
+        position: sticky;
+        top: 0;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 4px 12px;
+        padding: 6px 12px;
+        font-weight: 600;
+        background: var(--fc-neutral-bg-color);
+        border-bottom: 1px solid var(--line);
+      }
+      .list-day .muted {
+        font-weight: 500;
+      }
+      .list-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+      }
+      .list-row:hover {
+        background: var(--fc-neutral-bg-color);
+      }
+      .list-row .time {
+        flex: none;
+        width: 100px;
+      }
+      .list-row .title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .list-end {
+        padding: 12px;
+        text-align: center;
+        color: var(--muted);
+      }
       .fc .no-turns {
         background-image: repeating-linear-gradient(45deg, transparent 0 6px, rgb(255 255 255 / 0.18) 6px 12px);
       }
