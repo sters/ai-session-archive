@@ -82,6 +82,7 @@
         flex: 1;
         min-height: 0;
         overflow-y: auto;
+        container-type: size;
       }
       .view {
         height: 100%;
@@ -582,11 +583,11 @@
         cursor: pointer;
         line-height: 1;
       }
-      #detail h3 {
+      .detail h3 {
         font-size: 15px;
         margin: 0 28px 4px 0;
       }
-      #detail h4 {
+      .detail h4 {
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.04em;
@@ -596,30 +597,65 @@
         padding-top: 12px;
         border-top: 1px solid var(--line);
       }
-      #detail .when {
+      .detail .when {
         color: var(--muted);
       }
-      #detail dl {
+      .detail dl {
         display: grid;
         grid-template-columns: 96px 1fr;
         gap: 5px 12px;
         margin: 0;
       }
-      #detail dt {
+      .detail dt {
         color: var(--muted);
       }
-      #detail dd {
+      .detail dd {
         margin: 0;
         word-break: break-all;
         min-width: 0;
       }
-      #detail details summary {
+      .detail details summary {
         cursor: pointer;
         color: var(--muted);
         margin-top: 4px;
       }
-      #detail .table-wrap {
+      .detail .table-wrap {
         margin-top: 12px;
+      }
+      .session-view {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 460px;
+        align-items: start;
+      }
+      .session-view > .page {
+        max-width: none;
+        margin: 0;
+        min-width: 0;
+      }
+      /* Stays beside the messages as #app scrolls, at the height of #app. */
+      .session-view > .detail {
+        position: sticky;
+        top: 0;
+        height: 100cqh;
+        box-sizing: border-box;
+        overflow-y: auto;
+        font-size: 13px;
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        padding: 20px;
+      }
+      .block-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .block-picker button {
+        font-size: 12px;
+        padding: 1px 6px;
+      }
+      .block-picker button[aria-pressed="true"] {
+        font-weight: 600;
       }
       .chips {
         display: flex;
@@ -705,6 +741,15 @@
         }
         .calendar-view aside {
           display: none;
+        }
+        .session-view {
+          grid-template-columns: 1fr;
+        }
+        .session-view > .detail {
+          position: static;
+          height: auto;
+          border-left: 0;
+          border-top: 1px solid var(--line);
         }
       }
     </style>
