@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.1.11](https://github.com/sters/ai-session-archive/compare/v0.1.10...v0.1.11) - 2026-11-27
+
+- Show the calendar's detail pane beside a session's messages by @sters in https://github.com/sters/ai-session-archive/pull/19
+
 ## [v0.1.10](https://github.com/sters/ai-session-archive/compare/v0.1.9...v0.1.10) - 2026-11-26
 
 - Improve the calendar list view and sidebar totals by @sters in https://github.com/sters/ai-session-archive/pull/17
