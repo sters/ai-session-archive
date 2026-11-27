@@ -23,6 +23,13 @@ bunx github:sters/ai-session-archive summaries --period week --since 2026-10-01
 bunx github:sters/ai-session-archive web         # search and read sessions at http://localhost:7357
 ```
 
+`bunx` keeps the commit it first installed and does not pick up a newer one. To update, remove its install and run
+any command again (stop a running `web` first and start it again after):
+
+```bash
+rm -rf "$(bun pm cache)"/.bunx-"$(id -u)"/ai-session-archive@github@*
+```
+
 `web` only reads the database. Run `sync` (or the `SessionEnd` hook below) to bring new sessions in; the pages
 pick them up without a restart.
 
