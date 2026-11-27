@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.1.12](https://github.com/sters/ai-session-archive/compare/v0.1.11...v0.1.12) - 2026-11-27
+
+- Offer a command that reads a deleted session back from the archive by @sters in https://github.com/sters/ai-session-archive/pull/21
+
 ## [v0.1.11](https://github.com/sters/ai-session-archive/compare/v0.1.10...v0.1.11) - 2026-11-27
 
 - Show the calendar's detail pane beside a session's messages by @sters in https://github.com/sters/ai-session-archive/pull/19
