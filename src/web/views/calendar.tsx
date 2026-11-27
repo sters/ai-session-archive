@@ -283,7 +283,14 @@ function usageTable(usage: Record<string, ModelUsage> | undefined) {
 export function detailOf(ev: FcEvent, openLink = true): Child {
   const { session: s, block: b } = ev.extendedProps;
   const row = (k: string, v: Child) => [<dt>{k}</dt>, <dd>{v}</dd>];
-  const cmd = `${s.cwd ? `cd ${shellQuote(s.cwd)} && ` : ""}claude --resume ${s.id}`;
+  // A session whose transcript is gone cannot be resumed; a new one reads it back from the archive.
+  const show = `bunx github:sters/ai-session-archive show ${s.id}`;
+  const claude = s.transcriptGone
+    ? `claude ${shellQuote(
+        `Continue session ${s.id}, whose transcript was deleted. Read it from the archive first: \`${show} --role user,assistant\` gives the exchange, and \`${show} --lines <from>-<to>\` the tool calls of the part you need. Then pick up where it left off.`,
+      )}`
+    : `claude --resume ${s.id}`;
+  const cmd = `${s.cwd ? `cd ${shellQuote(s.cwd)} && ` : ""}${claude}`;
   const copy = (e: Event) => {
     const button = e.currentTarget as HTMLElement;
     navigator.clipboard.writeText(cmd).then(
@@ -380,6 +387,9 @@ export function detailOf(ev: FcEvent, openLink = true): Child {
           </dl>,
         ],
     usageTable(s.usage),
+    s.transcriptGone && (
+      <p class="muted">The transcript was deleted, so this starts a new session that reads the archived one.</p>
+    ),
     <div class="cmd">
       <code>{cmd}</code>
       <button type="button" onClick={copy}>
