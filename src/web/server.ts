@@ -60,6 +60,10 @@ export function serve(db: Database, port: number, calendar: Calendar) {
         );
       }),
       "/api/sessions/:id": loopbackOnly((req) => Response.json(getSession(db, req.params.id))),
+      "/api/sessions/:id/events": loopbackOnly((req) => {
+        const sessions = calendar.sessions().filter((s) => s.id === req.params.id);
+        return Response.json(eventsBetween(sessions, -Infinity, Infinity));
+      }),
       "/api/events": loopbackOnly((req) => {
         const p = new URL(req.url).searchParams;
         const start = parseTime(p.get("start"));

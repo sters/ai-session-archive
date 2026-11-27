@@ -280,7 +280,7 @@ function usageTable(usage: Record<string, ModelUsage> | undefined) {
   );
 }
 
-function detailOf(ev: FcEvent): Child {
+export function detailOf(ev: FcEvent, openLink = true): Child {
   const { session: s, block: b } = ev.extendedProps;
   const row = (k: string, v: Child) => [<dt>{k}</dt>, <dd>{v}</dd>];
   const cmd = `${s.cwd ? `cd ${shellQuote(s.cwd)} && ` : ""}claude --resume ${s.id}`;
@@ -386,9 +386,11 @@ function detailOf(ev: FcEvent): Child {
         Copy
       </button>
     </div>,
-    <a class="open-archive" href={`/?${new URLSearchParams({ s: s.id })}`}>
-      Open session messages
-    </a>,
+    openLink && (
+      <a class="open-archive" href={`/?${new URLSearchParams({ s: s.id })}`}>
+        Open session messages
+      </a>
+    ),
   ];
 }
 
@@ -402,7 +404,7 @@ export const calendar: View = async (_params, signal) => {
   const detailBody = <div />;
   const closeDetail = () => (detail.hidden = true);
   const detail = (
-    <section id="detail" hidden>
+    <section id="detail" class="detail" hidden>
       <button class="close" type="button" aria-label="Close" onClick={closeDetail}>
         ×
       </button>
