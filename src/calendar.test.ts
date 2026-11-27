@@ -231,3 +231,26 @@ test("sessions archived before records were kept are laid out from their message
   expect(events.map((e) => e.id)).toEqual(["old#0"]);
   expect(eventsBetween(sessions, t("2026-09-02T00:00:00Z"), t("2026-09-03T00:00:00Z"))).toEqual([]);
 });
+
+test("a session whose transcript was deleted is marked so", () => {
+  const db = openDb(":memory:");
+  db.run(
+    `INSERT INTO sessions (id, file_path, project_dir, cwd, imported_bytes, import_version) VALUES
+       ('kept', '${import.meta.path}', 'p', '/work/repo', 10, 0),
+       ('gone', '/gone/gone.jsonl', 'p', '/work/repo', 10, 0)`,
+  );
+  db.run(
+    `INSERT INTO messages (session, ts, role, tool, text) VALUES
+       (1, '2026-09-01T10:00:00Z', 'user', NULL, 'do it'),
+       (2, '2026-09-01T11:00:00Z', 'user', NULL, 'do it')`,
+  );
+  const events = eventsBetween(
+    new Calendar(db, 30 * 60_000).sessions(),
+    t("2026-09-01T00:00:00Z"),
+    t("2026-09-02T00:00:00Z"),
+  );
+  expect(Object.fromEntries(events.map((e) => [e.id, e.extendedProps.session.transcriptGone]))).toEqual({
+    "kept#0": undefined,
+    "gone#0": true,
+  });
+});

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { IMPORT_VERSION } from "./sync";
 
 // Splits sessions into blocks of activity for the calendar page, from the `records` table.
@@ -69,6 +70,8 @@ export type CalendarSession = {
   entrypoint: string;
   version: string;
   slug: string;
+  // The transcript the session was imported from, which Claude Code may have deleted since.
+  filePath?: string;
   // Per-model usage from the session's last cost-state; absent while a session runs or when it
   // ended without writing one.
   usage?: Record<string, ModelUsage>;
@@ -601,6 +604,7 @@ type SessionMeta = {
   cwd: string | null;
   git_branch: string | null;
   title: string | null;
+  file_path: string;
   imported_bytes: number;
   import_version: number;
 };
@@ -620,7 +624,7 @@ export class Calendar {
       .query<SessionMeta, []>(
         // A response can appear in several subagent transcripts; reading them in path order makes the
         // one whose usage counts deterministic.
-        "SELECT rowid, id, parent_id, cwd, git_branch, title, imported_bytes, import_version FROM sessions ORDER BY file_path",
+        "SELECT rowid, id, parent_id, cwd, git_branch, title, file_path, imported_bytes, import_version FROM sessions ORDER BY file_path",
       )
       .all();
     const subs = new Map<string, SessionMeta[]>();
@@ -648,6 +652,7 @@ export class Calendar {
     );
     s.cwd ||= r.cwd ?? "";
     s.branch ||= r.git_branch ?? "";
+    s.filePath = r.file_path;
     // The ai-title, which a session archived from its messages alone has nowhere else.
     if (r.title) s.title = r.title;
     return s;
@@ -695,6 +700,8 @@ export type SessionInfo = Omit<CalendarSession, "blocks" | "title"> & {
   linesAdded: number;
   linesRemoved: number;
   prs: PR[];
+  // Set when the transcript no longer exists, so `claude --resume` cannot open the session.
+  transcriptGone?: boolean;
 };
 
 function sessionInfo(s: CalendarSession): SessionInfo {
@@ -707,6 +714,7 @@ function sessionInfo(s: CalendarSession): SessionInfo {
     linesAdded: blocks.reduce((t, b) => t + b.linesAdded, 0),
     linesRemoved: blocks.reduce((t, b) => t + b.linesRemoved, 0),
     prs: blocks.flatMap((b) => b.prs),
+    transcriptGone: s.filePath ? !existsSync(s.filePath) || undefined : undefined,
   };
 }
 
